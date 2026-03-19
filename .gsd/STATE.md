@@ -14,11 +14,9 @@ updated: [ISO timestamp]
 # Project State
 
 ## Current Position
-
-**Milestone:** {name}
-**Phase:** {N} - {name}
-**Status:** {planning | executing | verifying | blocked}
-**Plan:** {current plan if executing}
+- **Phase**: 1
+- **Task**: Planning complete
+- **Status**: Ready for execution
 
 ## Last Action
 
