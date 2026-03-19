@@ -105,11 +105,54 @@ func (s *Store) RecentLog(n int) ([]LogEntry, error) {
 	return entries, nil
 }
 
-func (s *Store) UnsortedFiles() ([]string, error) {
-	return nil, nil
+func (s *Store) UnsortedFiles() ([]LogEntry, error) {
+	query := `SELECT id, timestamp, filename, original_filename, source, destination, tier, confidence, tags, action, reasoning, corrected 
+			  FROM sort_log WHERE action = 'parked' AND corrected = 0 ORDER BY id ASC`
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []LogEntry
+	for rows.Next() {
+		var e LogEntry
+		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Filename, &e.OriginalFilename, &e.Source, &e.Destination, &e.Tier, &e.Confidence, &e.Tags, &e.Action, &e.Reasoning, &e.Corrected); err != nil {
+			return nil, err
+		}
+		entries = append(entries, e)
+	}
+	return entries, nil
 }
 
-func (s *Store) MarkCorrected(id int, newDest string) error {
+func (s *Store) MarkCorrected(id int, newDest string, folderMatch string) error {
+	// 1. Update the log entry
+	_, err := s.db.Exec("UPDATE sort_log SET corrected = 1, destination = ? WHERE id = ?", newDest, id)
+	if err != nil {
+		return err
+	}
+
+	// 2. Fetch tags to update affinities
+	var tagsJSON string
+	err = s.db.QueryRow("SELECT tags FROM sort_log WHERE id = ?", id).Scan(&tagsJSON)
+	if err != nil {
+		return err
+	}
+
+	var tags []string
+	if err := json.Unmarshal([]byte(tagsJSON), &tags); err != nil {
+		// If tags aren't valid JSON (old entries), skip affinity update
+		return nil
+	}
+
+	// 3. Upsert affinities for each tag
+	for _, tag := range tags {
+		query := `INSERT INTO affinities (tag, folder, weight) 
+				  VALUES (?, ?, 1.0) 
+				  ON CONFLICT(tag, folder) DO UPDATE SET weight = weight + 1.0`
+		_, _ = s.db.Exec(query, tag, folderMatch)
+	}
+
 	return nil
 }
 
