@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"log"
@@ -142,8 +143,29 @@ var logCmd = &cobra.Command{
 		}
 		defer st.Close()
 
-		// Mock listing logic for now
-		fmt.Println("Recent history table (mock)")
+		logs, err := st.RecentLog(20)
+		if err != nil {
+			log.Fatalf("Failed to fetch logs: %v", err)
+		}
+
+		if len(logs) == 0 {
+			fmt.Println("No recent activity.")
+			return
+		}
+
+		fmt.Printf("%-20s | %-10s | %-30s | %-10s | %s\n", "Timestamp", "Action", "Filename", "Tier", "Destination")
+		fmt.Println(strings.Repeat("-", 100))
+		for _, l := range logs {
+			base := filepath.Base(l.Filename)
+			if len(base) > 28 {
+				base = base[:25] + "..."
+			}
+			dest := l.Destination
+			if len(dest) > 30 {
+				dest = "..." + dest[len(dest)-27:]
+			}
+			fmt.Printf("%-20s | %-10s | %-30s | Tier %-5d | %s\n", l.Timestamp, l.Action, base, l.Tier, dest)
+		}
 	},
 }
 
@@ -151,7 +173,51 @@ var reviewCmd = &cobra.Command{
 	Use:   "review",
 	Short: "List files in .unsorted/ for interactive resolve",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Interactive review logic initialized. (mock)")
+		cfg, st, pipe, err := initPipeline()
+		if err != nil {
+			log.Fatalf("Init failed: %v", err)
+		}
+		defer st.Close()
+
+		var root string
+		if len(cfg.Watch.Folders) > 0 {
+			root = cfg.Watch.Folders[0]
+		}
+		unsortedDir := filepath.Join(root, ".unsorted")
+
+		files, err := os.ReadDir(unsortedDir)
+		if err != nil {
+			fmt.Printf("No unsorted files found in %s\n", unsortedDir)
+			return
+		}
+
+		scanner := bufio.NewScanner(os.Stdin)
+		for _, f := range files {
+			if f.IsDir() {
+				continue
+			}
+
+			srcPath := filepath.Join(unsortedDir, f.Name())
+			fmt.Printf("\nFile: %s\nWhere to? [skip/path]: ", f.Name())
+			
+			if !scanner.Scan() {
+				break
+			}
+			
+			dest := strings.TrimSpace(scanner.Text())
+			if dest == "" || dest == "skip" {
+				fmt.Println("Skipped.")
+				continue
+			}
+
+			finalPath, err := pipe.Mover.Move(srcPath, dest)
+			if err != nil {
+				fmt.Printf("Failed to move: %v\n", err)
+			} else {
+				fmt.Printf("Moved to: %s\n", finalPath)
+			}
+		}
+		fmt.Println("Review complete.")
 	},
 }
 

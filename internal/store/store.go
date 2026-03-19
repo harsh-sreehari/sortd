@@ -56,12 +56,34 @@ func Open(dbPath string) (*Store, error) {
 }
 
 func (s *Store) LogDecision(d Decision) error {
-	// Simplified mock implementation for now
-	return nil
+	query := `INSERT INTO sort_log (timestamp, filename, source, destination, tier, confidence, tags, action) 
+			  VALUES (datetime('now'), ?, ?, ?, ?, ?, ?, ?)`
+	tags := ""
+	if len(d.Tags) > 0 {
+		tags = d.Tags[0] // Simplify tags
+	}
+	_, err := s.db.Exec(query, d.File, d.File, d.Destination, d.Tier, d.Confidence, tags, d.Action)
+	return err
 }
 
 func (s *Store) RecentLog(n int) ([]LogEntry, error) {
-	return nil, nil
+	query := `SELECT id, timestamp, filename, source, destination, tier, confidence, tags, action, corrected 
+			  FROM sort_log ORDER BY id DESC LIMIT ?`
+	rows, err := s.db.Query(query, n)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []LogEntry
+	for rows.Next() {
+		var e LogEntry
+		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Filename, &e.Source, &e.Destination, &e.Tier, &e.Confidence, &e.Tags, &e.Action, &e.Corrected); err != nil {
+			return nil, err
+		}
+		entries = append(entries, e)
+	}
+	return entries, nil
 }
 
 func (s *Store) UnsortedFiles() ([]string, error) {
