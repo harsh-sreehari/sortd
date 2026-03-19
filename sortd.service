@@ -1,6 +1,6 @@
 [Unit]
 Description=sortd context-aware file organizer daemon
-After=network.target
+After=network.target graphical-session.target
 
 [Service]
 Type=simple

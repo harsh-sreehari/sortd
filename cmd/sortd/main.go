@@ -22,6 +22,13 @@ import (
 	"github.com/harsh-sreehari/sortd/internal/watcher"
 )
 
+func getPidPath() string {
+	home, _ := os.UserHomeDir()
+	path := filepath.Join(home, ".local/share/sortd/sortd.pid")
+	os.MkdirAll(filepath.Dir(path), 0755)
+	return path
+}
+
 func initPipeline() (*config.Config, *store.Store, *pipeline.Pipeline, error) {
 	cfg, err := config.LoadConfig("~/.config/sortd/config.toml") // Simplified
 	if err != nil {
@@ -58,6 +65,23 @@ var daemonStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the background watcher",
 	Run: func(cmd *cobra.Command, args []string) {
+		pidPath := getPidPath()
+		if _, err := os.Stat(pidPath); err == nil {
+			// Check if process still exists
+			data, _ := os.ReadFile(pidPath)
+			var pid int
+			fmt.Sscanf(string(data), "%d", &pid)
+			process, err := os.FindProcess(pid)
+			if err == nil && process.Signal(syscall.Signal(0)) == nil {
+				log.Fatalf("Daemon already running with PID %d", pid)
+			}
+		}
+
+		if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
+			log.Fatalf("Failed to write PID file: %v", err)
+		}
+		defer os.Remove(pidPath)
+
 		cfg, st, pipe, err := initPipeline()
 		if err != nil {
 			log.Fatalf("Init failed: %v", err)
@@ -91,6 +115,53 @@ var daemonStartCmd = &cobra.Command{
 		<-sigCh
 		fmt.Println("Shutting down sortd daemon...")
 		w.Stop()
+	},
+}
+
+var daemonStopCmd = &cobra.Command{
+	Use:   "stop",
+	Short: "Stop the background watcher",
+	Run: func(cmd *cobra.Command, args []string) {
+		pidPath := getPidPath()
+		data, err := os.ReadFile(pidPath)
+		if err != nil {
+			fmt.Println("Daemon is NOT running (no PID file).")
+			return
+		}
+
+		var pid int
+		fmt.Sscanf(string(data), "%d", &pid)
+		process, err := os.FindProcess(pid)
+		if err != nil {
+			fmt.Println("Process not found. Cleaning up stale PID file.")
+			os.Remove(pidPath)
+			return
+		}
+
+		fmt.Printf("Stopping daemon (PID %d)...\n", pid)
+		process.Signal(syscall.SIGTERM)
+	},
+}
+
+var daemonStatusCmd = &cobra.Command{
+	Use:   "status",
+	Short: "Check the background watcher status",
+	Run: func(cmd *cobra.Command, args []string) {
+		pidPath := getPidPath()
+		data, err := os.ReadFile(pidPath)
+		if err != nil {
+			fmt.Println("Status: Stopped")
+			return
+		}
+
+		var pid int
+		fmt.Sscanf(string(data), "%d", &pid)
+		process, err := os.FindProcess(pid)
+		if err == nil && process.Signal(syscall.Signal(0)) == nil {
+			fmt.Printf("Status: Running (PID %d)\n", pid)
+		} else {
+			fmt.Println("Status: Stale (PID file exists but process is dead)")
+		}
 	},
 }
 
@@ -245,7 +316,7 @@ var indexCmd = &cobra.Command{
 }
 
 func init() {
-	daemonCmd.AddCommand(daemonStartCmd)
+	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd)
 	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd)
 }
 
