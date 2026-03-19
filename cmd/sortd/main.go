@@ -333,6 +333,39 @@ var findCmd = &cobra.Command{
 	},
 }
 
+var tagsCmd = &cobra.Command{
+	Use:   "tags",
+	Short: "Show frequency of tags found in your files",
+	Run: func(cmd *cobra.Command, args []string) {
+		_, st, _, err := initPipeline()
+		if err != nil {
+			log.Fatalf("Init failed: %v", err)
+		}
+		defer st.Close()
+
+		stats, err := st.AggregatedTags()
+		if err != nil {
+			log.Fatalf("Failed to aggregate tags: %v", err)
+		}
+
+		if len(stats) == 0 {
+			fmt.Println("No tags found yet.")
+			return
+		}
+
+		fmt.Println("\n🏷️  Tag Analytics (Global)")
+		fmt.Println(strings.Repeat("-", 30))
+		for _, s := range stats {
+			// Basic text bar representation
+			bar := ""
+			for i := 0; i < s.Count && i < 40; i++ {
+				bar += "■"
+			}
+			fmt.Printf("%15s | %-5d %s\n", s.Tag, s.Count, bar)
+		}
+	},
+}
+
 var reviewCmd = &cobra.Command{
 	Use:   "review",
 	Short: "List files in .unsorted/ for interactive resolve",
@@ -468,7 +501,7 @@ func init() {
 	logCmd.Flags().IntVarP(&logLimit, "limit", "n", 20, "Number of logs to show")
 
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd)
-	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd)
+	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd, tagsCmd)
 }
 
 func main() {

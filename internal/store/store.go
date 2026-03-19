@@ -6,9 +6,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	_ "modernc.org/sqlite"
 )
+
+type TagStat struct {
+	Tag   string
+	Count int
+}
 
 type Store struct {
 	db *sql.DB
@@ -200,6 +206,40 @@ func (s *Store) MarkCorrected(id int, newDest string, folderMatch string) error 
 	}
 
 	return nil
+}
+
+func (s *Store) AggregatedTags() ([]TagStat, error) {
+	query := "SELECT tags FROM sort_log WHERE tags IS NOT NULL AND tags != '[]'"
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	counts := make(map[string]int)
+	for rows.Next() {
+		var tagsJSON string
+		if err := rows.Scan(&tagsJSON); err != nil {
+			continue
+		}
+		var tags []string
+		if err := json.Unmarshal([]byte(tagsJSON), &tags); err == nil {
+			for _, t := range tags {
+				counts[t]++
+			}
+		}
+	}
+
+	var stats []TagStat
+	for t, c := range counts {
+		stats = append(stats, TagStat{Tag: t, Count: c})
+	}
+
+	sort.Slice(stats, func(i, j int) bool {
+		return stats[i].Count > stats[j].Count
+	})
+
+	return stats, nil
 }
 
 func (s *Store) DB() *sql.DB {
