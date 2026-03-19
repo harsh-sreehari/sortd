@@ -254,6 +254,60 @@ func (s *Store) GetAffinities(tags []string) (map[string]float64, error) {
 	return affinities, nil
 }
 
+func (s *Store) Prune(roots []string) (int, int, error) {
+	// 0. Safety check: ensure at least one root is reachable to avoid wiping on empty disk
+	reachable := false
+	for _, r := range roots {
+		if _, err := os.Stat(r); err == nil {
+			reachable = true
+			break
+		}
+	}
+	if !reachable && len(roots) > 0 {
+		return 0, 0, fmt.Errorf("none of the root folders are reachable. Aborting prune to protect database")
+	}
+
+	prunedIndex := 0
+	prunedLog := 0
+
+	// 1. Prune folder_index
+	rows, _ := s.db.Query("SELECT path FROM folder_index")
+	var toDeleteIndex []string
+	for rows.Next() {
+		var p string
+		rows.Scan(&p)
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			toDeleteIndex = append(toDeleteIndex, p)
+		}
+	}
+	rows.Close()
+
+	for _, p := range toDeleteIndex {
+		s.db.Exec("DELETE FROM folder_index WHERE path = ?", p)
+		prunedIndex++
+	}
+
+	// 2. Prune sort_log (parking files)
+	rows, _ = s.db.Query("SELECT id, destination FROM sort_log")
+	var toDeleteLog []int
+	for rows.Next() {
+		var id int
+		var dest string
+		rows.Scan(&id, &dest)
+		if _, err := os.Stat(dest); os.IsNotExist(err) {
+			toDeleteLog = append(toDeleteLog, id)
+		}
+	}
+	rows.Close()
+
+	for _, id := range toDeleteLog {
+		s.db.Exec("DELETE FROM sort_log WHERE id = ?", id)
+		prunedLog++
+	}
+
+	return prunedIndex, prunedLog, nil
+}
+
 func (s *Store) AggregatedTags() ([]TagStat, error) {
 	query := "SELECT tags FROM sort_log WHERE tags IS NOT NULL AND tags != '[]'"
 	rows, err := s.db.Query(query)
