@@ -569,6 +569,34 @@ var renameCmd = &cobra.Command{
 	},
 }
 
+var pruneCmd = &cobra.Command{
+	Use:   "prune",
+	Short: "Remove stale records for files that no longer exist",
+	Run: func(cmd *cobra.Command, args []string) {
+		home, _ := os.UserHomeDir()
+		configPath := filepath.Join(home, ".config/sortd/config.toml")
+		cfg, err := config.LoadConfig(configPath)
+		if err != nil {
+			log.Fatalf("Failed to load config: %v", err)
+		}
+
+		st, err := store.Open(cfg.Behaviour.DBPath)
+		if err != nil {
+			log.Fatalf("Failed to open DB: %v", err)
+		}
+		defer st.Close()
+
+		fmt.Println("🧹 Pruning stale records...")
+		prunedIndex, prunedLog, err := st.Prune(cfg.Watch.Folders)
+		if err != nil {
+			log.Fatalf("Prune failed: %v", err)
+		}
+
+		fmt.Printf("✅ Pruned %d folder index entries.\n", prunedIndex)
+		fmt.Printf("✅ Pruned %d log entries.\n", prunedLog)
+	},
+}
+
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize sortd configuration and install systemd service",
@@ -623,7 +651,7 @@ func init() {
 	logCmd.Flags().IntVarP(&logLimit, "limit", "n", 20, "Number of logs to show")
 
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd)
-	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd, tagsCmd, renameCmd)
+	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd, tagsCmd, renameCmd, pruneCmd)
 }
 
 func main() {
