@@ -20,6 +20,7 @@ import (
 	"github.com/harsh-sreehari/sortd/internal/pipeline"
 	"github.com/harsh-sreehari/sortd/internal/store"
 	"github.com/harsh-sreehari/sortd/internal/watcher"
+	"io"
 )
 
 func getPidPath() string {
@@ -294,30 +295,79 @@ var indexCmd = &cobra.Command{
 	Use:   "index",
 	Short: "Re-crawl the folder tree and rebuild the index",
 	Run: func(cmd *cobra.Command, args []string) {
-		_, _, pipe, err := initPipeline()
+		runIndex()
+	},
+}
+
+func runIndex() {
+	_, _, pipe, err := initPipeline()
+	if err != nil {
+		log.Fatalf("Init failed: %v", err)
+	}
+
+	home, _ := os.UserHomeDir()
+	roots := []string{
+		filepath.Join(home, "Documents"),
+		filepath.Join(home, "Desktop"),
+		filepath.Join(home, "Downloads"),
+	}
+	
+	fmt.Printf("Re-indexing your folders in: %v...\n", roots)
+	err = pipe.Graph.Crawl(roots, []string{"/node_modules", "/.git", "/.unsorted", "/.local", "/.cache", "/.gemini", "/.agent"})
+	if err != nil {
+		log.Fatalf("Crawl failed: %v", err)
+	}
+	fmt.Println("Indexing complete.")
+}
+
+var initCmd = &cobra.Command{
+	Use:   "init",
+	Short: "Initialize sortd configuration and install systemd service",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println("🚀 Initializing sortd...")
+
+		// 1. Scaffold Config & Dirs
+		home, _ := os.UserHomeDir()
+		configPath := filepath.Join(home, ".config/sortd/config.toml")
+		_, err := config.LoadConfig(configPath)
 		if err != nil {
-			log.Fatalf("Init failed: %v", err)
+			log.Fatalf("Failed to load/create config: %v", err)
 		}
 
-		home, _ := os.UserHomeDir()
-		roots := []string{
-			filepath.Join(home, "Documents"),
-			filepath.Join(home, "Desktop"),
-			filepath.Join(home, "Downloads"),
+		shareDir := filepath.Join(home, ".local/share/sortd")
+		os.MkdirAll(shareDir, 0755)
+		fmt.Printf("✅ Folders and configuration prepared at %s\n", configPath)
+
+		// 2. Perform initial index
+		runIndex()
+
+		// 3. Install systemd service
+		serviceFile := "sortd.service"
+		if _, err := os.Stat(serviceFile); err == nil {
+			dest := filepath.Join(home, ".config/systemd/user/sortd.service")
+			os.MkdirAll(filepath.Dir(dest), 0755)
+
+			src, _ := os.Open(serviceFile)
+			defer src.Close()
+			dst, _ := os.Create(dest)
+			defer dst.Close()
+			io.Copy(dst, src)
+
+			fmt.Printf("✅ Systemd user service installed to %s\n", dest)
+			fmt.Println("\nTo start the daemon, run:")
+			fmt.Println("  systemctl --user daemon-reload")
+			fmt.Println("  systemctl --user enable --now sortd")
+		} else {
+			fmt.Println("⚠️  sortd.service file not found in current directory, skipping service installation.")
 		}
-		
-		fmt.Printf("Re-indexing your folders in: %v...\n", roots)
-		err = pipe.Graph.Crawl(roots, []string{"/node_modules", "/.git", "/.unsorted", "/.local", "/.cache", "/.gemini", "/.agent"})
-		if err != nil {
-			log.Fatalf("Crawl failed: %v", err)
-		}
-		fmt.Println("Indexing complete.")
+
+		fmt.Println("\nInitialization complete! sortd is ready to go.")
 	},
 }
 
 func init() {
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd)
-	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd)
+	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd)
 }
 
 func main() {
