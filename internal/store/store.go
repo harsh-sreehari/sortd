@@ -125,6 +125,52 @@ func (s *Store) UnsortedFiles() ([]LogEntry, error) {
 	return entries, nil
 }
 
+func (s *Store) SearchLog(n int, filters map[string]string) ([]LogEntry, error) {
+	where := "WHERE 1=1"
+	var args []interface{}
+
+	if val, ok := filters["tag"]; ok && val != "" {
+		where += " AND tags LIKE ?"
+		args = append(args, "%"+val+"%")
+	}
+	if val, ok := filters["tier"]; ok && val != "" {
+		where += " AND tier = ?"
+		args = append(args, val)
+	}
+	if val, ok := filters["action"]; ok && val != "" {
+		where += " AND action = ?"
+		args = append(args, val)
+	}
+	if val, ok := filters["today"]; ok && val == "true" {
+		where += " AND timestamp LIKE (date('now') || '%')"
+	}
+	if val, ok := filters["query"]; ok && val != "" {
+		where += " AND (original_filename LIKE ? OR destination LIKE ? OR reasoning LIKE ?)"
+		pattern := "%" + val + "%"
+		args = append(args, pattern, pattern, pattern)
+	}
+
+	query := fmt.Sprintf(`SELECT id, timestamp, filename, original_filename, source, destination, tier, confidence, tags, action, reasoning, corrected 
+			  FROM sort_log %s ORDER BY id DESC LIMIT ?`, where)
+	args = append(args, n)
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []LogEntry
+	for rows.Next() {
+		var e LogEntry
+		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Filename, &e.OriginalFilename, &e.Source, &e.Destination, &e.Tier, &e.Confidence, &e.Tags, &e.Action, &e.Reasoning, &e.Corrected); err != nil {
+			return nil, err
+		}
+		entries = append(entries, e)
+	}
+	return entries, nil
+}
+
 func (s *Store) MarkCorrected(id int, newDest string, folderMatch string) error {
 	// 1. Update the log entry
 	_, err := s.db.Exec("UPDATE sort_log SET corrected = 1, destination = ? WHERE id = ?", newDest, id)

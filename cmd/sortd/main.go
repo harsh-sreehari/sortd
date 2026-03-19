@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -205,6 +206,15 @@ var runCmd = &cobra.Command{
 	},
 }
 
+var (
+	logTier   string
+	logAction string
+	logParked bool
+	logToday  bool
+	logTag    string
+	logLimit  int
+)
+
 var logCmd = &cobra.Command{
 	Use:   "log",
 	Short: "Show recent sort history",
@@ -215,26 +225,110 @@ var logCmd = &cobra.Command{
 		}
 		defer st.Close()
 
-		logs, err := st.RecentLog(20)
+		filters := make(map[string]string)
+		if logTier != "" {
+			filters["tier"] = logTier
+		}
+		if logAction != "" {
+			filters["action"] = logAction
+		}
+		if logParked {
+			filters["action"] = "parked"
+		}
+		if logToday {
+			filters["today"] = "true"
+		}
+		if logTag != "" {
+			filters["tag"] = logTag
+		}
+
+		logs, err := st.SearchLog(logLimit, filters)
 		if err != nil {
 			log.Fatalf("Failed to fetch logs: %v", err)
 		}
 
 		if len(logs) == 0 {
-			fmt.Println("No recent activity.")
+			fmt.Println("No matching activity.")
 			return
 		}
 
-		fmt.Printf("%-20s | %-10s | %-40s | %-8s | %s\n", "Timestamp", "Action", "Filename", "Tier", "Destination")
+		// ANSI Colors
+		reset := "\033[0m"
+		bold := "\033[1m"
+		green := "\033[32m"
+		yellow := "\033[33m"
+		cyan := "\033[36m"
+		gray := "\033[90m"
+
+		fmt.Printf("%s%-20s | %-10s | %-40s | %-8s | %s%s\n", bold, "Timestamp", "Action", "Filename", "Tier", "Destination", reset)
 		fmt.Println(strings.Repeat("-", 120))
 		for _, l := range logs {
-			base := filepath.Base(l.Filename)
+			base := l.OriginalFilename
+			if base == "" {
+				base = filepath.Base(l.Filename)
+			}
 			if len(base) > 38 {
 				base = base[:35] + "..."
 			}
-			dest := l.Destination
-			// Give extra room for destination
-			fmt.Printf("%-20s | %-10s | %-40s | Tier %-2d | %s\n", l.Timestamp, l.Action, base, l.Tier, dest)
+
+			// Format tags
+			tagsStr := ""
+			var tags []string
+			if err := json.Unmarshal([]byte(l.Tags), &tags); err == nil && len(tags) > 0 {
+				tagsStr = fmt.Sprintf(" %s[%s]%s", gray, strings.Join(tags, ","), reset)
+			}
+
+			color := reset
+			switch l.Action {
+			case "moved":
+				color = green
+			case "parked":
+				color = yellow
+			case "skipped":
+				color = gray
+			}
+
+			fmt.Printf("%s%-20s%s | %s%-10s%s | %-40s | %sTier %-2d%s | %s%s\n",
+				gray, l.Timestamp, reset,
+				color, l.Action, reset,
+				base+tagsStr,
+				cyan, l.Tier, reset,
+				l.Destination, reset)
+		}
+	},
+}
+
+var findCmd = &cobra.Command{
+	Use:   "find <query>",
+	Short: "Search sort history for a specific file or destination",
+	Args:  cobra.MinimumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		_, st, _, err := initPipeline()
+		if err != nil {
+			log.Fatalf("Init failed: %v", err)
+		}
+		defer st.Close()
+
+		filters := map[string]string{"query": args[0]}
+		logs, err := st.SearchLog(50, filters)
+		if err != nil {
+			log.Fatalf("Search failed: %v", err)
+		}
+
+		if len(logs) == 0 {
+			fmt.Printf("No results found for '%s'\n", args[0])
+			return
+		}
+
+		// Reuse colored output logic (simplified or extract to helper if needed)
+		fmt.Printf("Found %d results for '%s':\n\n", len(logs), args[0])
+		for _, l := range logs {
+			fmt.Printf("\033[90m%s\033[0m \033[32m%s\033[0m -> %s\n", l.Timestamp[:16], l.Action, l.Destination)
+			fmt.Printf("      File: %s\n", l.OriginalFilename)
+			if l.Reasoning != "" {
+				fmt.Printf("      Why : \033[36m%s\033[0m\n", l.Reasoning)
+			}
+			fmt.Println()
 		}
 	},
 }
@@ -366,8 +460,15 @@ var initCmd = &cobra.Command{
 }
 
 func init() {
+	logCmd.Flags().StringVar(&logTier, "tier", "", "Filter by tier (1, 2, 3)")
+	logCmd.Flags().StringVar(&logAction, "action", "", "Filter by action (moved, parked, skipped)")
+	logCmd.Flags().BoolVar(&logParked, "parked", false, "Shortcut for --action=parked")
+	logCmd.Flags().BoolVar(&logToday, "today", false, "Show only today's logs")
+	logCmd.Flags().StringVar(&logTag, "tag", "", "Filter by tag")
+	logCmd.Flags().IntVarP(&logLimit, "limit", "n", 20, "Number of logs to show")
+
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd)
-	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd)
+	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd)
 }
 
 func main() {
