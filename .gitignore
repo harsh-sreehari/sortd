@@ -1,0 +1,35 @@
+# Binaries
+sortd
+sortd-*
+
+# Build artifacts
+*.exe
+*.out
+*.test
+
+# Go
+vendor/
+
+# GSD / Agent docs (internal project management)
+.gsd/
+.agent/
+.agents/
+_agent/
+_agents/
+docs/
+
+# Config & secrets
+*.env
+.env*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Data
+*.db
+*.log
