@@ -19,7 +19,7 @@
 ## Phases
 
 ### Phase 1: Storage Layer & Schema Maint
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 **Objective**: Add `original_filename` and `reasoning` columns to SQLite schema. Fix `store.LogDecision` tag handling. Add helper methods (`UnsortedFiles`, `MarkCorrected`).
 
 ### Phase 2: Pipeline Fixes & Maint
