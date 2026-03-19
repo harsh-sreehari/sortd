@@ -11,6 +11,7 @@ sortd-*
 vendor/
 
 # GSD / Agent docs (internal project management)
+.gsd/
 .agent/
 .agents/
 _agent/
