@@ -2,7 +2,7 @@
 
 > **"Your digital life, autonomously organized."**
 
-**Version: v1.1.0**
+**Version: v1.2.0**
 
 `sortd` is a lightweight background daemon that monitors your messy directories and uses a multi-tier AI engine to put files exactly where they belong. No more hunting for that one PDF in a sea of downloads.
 
