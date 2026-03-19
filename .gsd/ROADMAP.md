@@ -27,7 +27,7 @@
 **Objective**: Fix Tier 1 "Software/" action string in pipeline. Ensure `sortd.service` has the correct `After=` dependency (e.g., `network.target` or whatever is appropriate). Set up PID file creation.
 
 ### Phase 3: Core Commands
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 **Objective**: Implement `sortd init` to write default config, create dirs, run initial index, and install the systemd service. Implement `daemon stop` and `daemon status` via PID polling.
 
 ### Phase 4: History & Log Improvements
