@@ -80,13 +80,14 @@ PRIMARY CATEGORIES (Preferred):
 %v
 
 TASK:
-Decide where this file should go. 
+Decide where this file should go and suggest 1-3 appropriate tags.
 - You MUST prefer moving files into subfolders of the PRIMARY CATEGORIES.
 - If an existing folder matches perfectly, use it.
 - If you need a new subfolder, suggest it (e.g. "Documents/Personal/Tax").
 - Return ONLY valid JSON in this format:
 {
   "destination": "Relative/Path/To/Folder/",
+  "tags": ["tag1", "tag2"],
   "is_new_folder": true/false,
   "confidence": 0.0-1.0,
   "reasoning": "brief explanation"

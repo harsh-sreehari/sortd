@@ -8,7 +8,7 @@ import (
 	"github.com/harsh-sreehari/sortd/internal/peek"
 )
 
-func MatchTier3(path string, l llm.LLMBackend, folders []string, allowedRoots []string) (Decision, bool) {
+func MatchTier3(path string, l llm.LLMBackend, folders []string, allowedRoots []string, threshold float64) (Decision, bool) {
 	// 1. Peek content
 	content := peek.PeekDispatcher(path)
 
@@ -29,7 +29,6 @@ func MatchTier3(path string, l llm.LLMBackend, folders []string, allowedRoots []
 	}
 
 	// 4. Determine decision
-	threshold := 0.70 // Confidence threshold for LLM results
 	if resp.Confidence >= threshold {
 		return Decision{
 			Path:        path,
@@ -37,6 +36,7 @@ func MatchTier3(path string, l llm.LLMBackend, folders []string, allowedRoots []
 			Confidence:  resp.Confidence,
 			Tier:        3,
 			Action:      "moved",
+			Tags:        resp.Tags,
 			Reasoning:   "Tier 3: LLM reasoning: " + resp.Reasoning,
 		}, true
 	}

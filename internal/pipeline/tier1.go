@@ -12,6 +12,7 @@ type Decision struct {
 	Tier        int
 	Action      string
 	Reasoning   string
+	Tags        []string
 }
 
 type Rule struct {

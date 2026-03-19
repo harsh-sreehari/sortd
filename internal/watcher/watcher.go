@@ -93,8 +93,8 @@ func (w *Watcher) handleEvent(path string) {
 	}
 
 	w.debounceMs[absPath] = time.AfterFunc(time.Duration(w.cfg.Behaviour.DebounceSeconds)*time.Second, func() {
-		// Verify file still exists (it might have been deleted mid-debounce)
-		if _, err := os.Stat(absPath); err == nil {
+		// Verify file still exists and is NOT a directory
+		if info, err := os.Stat(absPath); err == nil && !info.IsDir() {
 			w.Out <- absPath
 		}
 		
