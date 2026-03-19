@@ -17,6 +17,9 @@ vendor/
 _agent/
 _agents/
 docs/
+.gemini/
+adapters/
+scripts/
 
 # Config & secrets
 *.env
