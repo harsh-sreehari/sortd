@@ -44,7 +44,7 @@ func (p *Pipeline) Process(path string) Decision {
 
 	// Tier 2: Fuzzy (needs folder keywords)
 	{
-		indices, _ := p.Graph.GetFolderIndices()
+		indices, _ := p.Graph.ListFolders()
 		if decision, match = MatchTier2(path, indices); match {
 			goto Execution
 		}

@@ -129,7 +129,7 @@ func (g *Graph) GetAllPaths() ([]string, error) {
 	return paths, nil
 }
 
-func (g *Graph) GetFolderIndices() ([]FolderIndex, error) {
+func (g *Graph) ListFolders() ([]FolderIndex, error) {
 	rows, err := g.Store.DB().Query("SELECT path, keywords, depth FROM folder_index")
 	if err != nil {
 		return nil, err

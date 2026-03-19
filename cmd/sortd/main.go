@@ -368,53 +368,96 @@ var tagsCmd = &cobra.Command{
 
 var reviewCmd = &cobra.Command{
 	Use:   "review",
-	Short: "List files in .unsorted/ for interactive resolve",
+	Short: "Interactive resolving of parked files with NLP support",
 	Run: func(cmd *cobra.Command, args []string) {
-		cfg, st, pipe, err := initPipeline()
+		_, st, pipe, err := initPipeline()
 		if err != nil {
 			log.Fatalf("Init failed: %v", err)
 		}
 		defer st.Close()
 
-		var root string
-		if len(cfg.Watch.Folders) > 0 {
-			root = cfg.Watch.Folders[0]
-		}
-		unsortedDir := filepath.Join(root, ".unsorted")
-
-		files, err := os.ReadDir(unsortedDir)
+		parked, err := st.UnsortedFiles()
 		if err != nil {
-			fmt.Printf("No unsorted files found in %s\n", unsortedDir)
+			log.Fatalf("Failed to fetch unsorted files: %v", err)
+		}
+
+		if len(parked) == 0 {
+			fmt.Println("No parked files to review! Everything is sorted. 🎉")
 			return
 		}
 
+		fmt.Printf("Found %d files needing review.\n", len(parked))
 		scanner := bufio.NewScanner(os.Stdin)
-		for _, f := range files {
-			if f.IsDir() {
-				continue
-			}
 
-			srcPath := filepath.Join(unsortedDir, f.Name())
-			fmt.Printf("\nFile: %s\nWhere to? [skip/path]: ", f.Name())
-			
+		folders, _ := pipe.Graph.ListFolders()
+		folderPaths := make([]string, len(folders))
+		for i, f := range folders {
+			folderPaths[i] = f.Path
+		}
+
+		for _, entry := range parked {
+			fmt.Printf("\n--------------------------------------------------\n")
+			fmt.Printf("📄 File: \033[1m%s\033[0m\n", entry.OriginalFilename)
+			if entry.Reasoning != "" {
+				fmt.Printf("🤖 System said: \033[90m%s\033[0m\n", entry.Reasoning)
+			}
+			fmt.Print("🤔 What is this? [skip/path/description]: ")
+
 			if !scanner.Scan() {
 				break
 			}
-			
-			dest := strings.TrimSpace(scanner.Text())
-			if dest == "" || dest == "skip" {
-				fmt.Println("Skipped.")
+			input := strings.TrimSpace(scanner.Text())
+
+			if input == "" || input == "skip" {
+				fmt.Println("⏭️  Skipped.")
 				continue
 			}
 
-			finalPath, err := pipe.Mover.Move(srcPath, dest)
-			if err != nil {
-				fmt.Printf("Failed to move: %v\n", err)
+			var dest string
+
+			// 1. Check if input is a valid direct path (relative to home or partial)
+			if _, err := os.Stat(input); err == nil {
+				dest = input
 			} else {
-				fmt.Printf("Moved to: %s\n", finalPath)
+				// 2. Try Fuzzy Description Match (Tier 2 logic)
+				if matched, ok := pipeline.MatchDescription(input, folders); ok {
+					fmt.Printf("💡 Fuzzy match found: \033[36m%s\033[0m. Use this? [Y/n]: ", matched)
+					scanner.Scan()
+					if strings.ToLower(scanner.Text()) != "n" {
+						dest = matched
+					}
+				}
+
+				// 3. Fallback to LLM
+				if dest == "" {
+					fmt.Println("🧠 Asking LLM for best destination...")
+					resp, err := pipe.LLM.ResolveReview(input, entry.OriginalFilename, folderPaths)
+					if err == nil && resp.Confidence > 0.5 {
+						fmt.Printf("🤖 LLM suggests: \033[36m%s\033[0m (%s). Use this? [Y/n]: ", resp.Destination, resp.Reasoning)
+						scanner.Scan()
+						if strings.ToLower(scanner.Text()) != "n" {
+							dest = resp.Destination
+						}
+					}
+				}
+			}
+
+			if dest == "" {
+				fmt.Println("❌ Could not determine destination. Skipped.")
+				continue
+			}
+
+			finalPath, err := pipe.Mover.Move(entry.Filename, dest)
+			if err != nil {
+				fmt.Printf("❌ Failed to move: %v\n", err)
+			} else {
+				fmt.Printf("✅ Moved to: %s\n", finalPath)
+				// Update affinities for the folder we moved to
+				st.MarkCorrected(entry.ID, finalPath, dest)
 			}
 		}
-		fmt.Println("Review complete.")
+
+		fmt.Println("\nReview complete.")
 	},
 }
 

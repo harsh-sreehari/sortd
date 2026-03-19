@@ -40,6 +40,31 @@ func MatchTier2(path string, folders []graph.FolderIndex) (Decision, bool) {
 	return Decision{}, false
 }
 
+func MatchDescription(desc string, folders []graph.FolderIndex) (string, bool) {
+	tokens := graph.TokenisePath(desc)
+	if len(tokens) == 0 {
+		return "", false
+	}
+
+	bestScore := 0.0
+	bestFolder := ""
+
+	for _, folder := range folders {
+		score := calculateOverlap(tokens, folder.Keywords)
+		if score > bestScore {
+			bestScore = score
+			bestFolder = folder.Path
+		}
+	}
+
+	threshold := 0.50 // Stricter threshold for NL descriptions
+	if bestScore >= threshold {
+		return bestFolder, true
+	}
+
+	return "", false
+}
+
 func calculateOverlap(fileTokens, folderKeywords []string) float64 {
 	if len(folderKeywords) == 0 {
 		return 0

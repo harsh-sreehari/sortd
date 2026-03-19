@@ -27,11 +27,43 @@ type TagRequest struct {
 
 type LLMBackend interface {
 	TagContent(req TagRequest) (TagResponse, error)
+	ResolveReview(userInput string, filename string, tree []string) (TagResponse, error)
 }
 
 type LMStudioBackend struct {
 	Host  string
 	Model string
+}
+
+func (l *LMStudioBackend) ResolveReview(userInput string, filename string, tree []string) (TagResponse, error) {
+	prompt := fmt.Sprintf(`A user is reviewing a file they want to move.
+FILE: "%s"
+USER DESCRIPTION of this file: "%s"
+
+EXISTING FOLDERS:
+%v
+
+TASK:
+Based on the user's description and the filename, determine which existing folder is the best match.
+Suggest a NEW folder only if none of the existing ones are appropriate.
+Return ONLY valid JSON in this format:
+{
+  "destination": "Folder/Name/",
+  "is_new_folder": true/false,
+  "confidence": 0.0-1.0,
+  "reasoning": "brief explanation"
+}`, filename, userInput, tree)
+
+	chatReq := map[string]interface{}{
+		"model": l.Model,
+		"messages": []map[string]string{
+			{"role": "system", "content": "You are a helpful assistant that outputs only JSON."},
+			{"role": "user", "content": prompt},
+		},
+		"temperature": 0.1,
+	}
+
+	return l.sendRequest(chatReq)
 }
 
 func (l *LMStudioBackend) TagContent(req TagRequest) (TagResponse, error) {
@@ -60,7 +92,6 @@ Decide where this file should go.
   "reasoning": "brief explanation"
 }`, req.Filename, req.Extension, req.ContentPeek, req.FolderTree, req.AllowedRoots)
 
-	// Build request
 	chatReq := map[string]interface{}{
 		"model": l.Model,
 		"messages": []map[string]string{
@@ -70,6 +101,10 @@ Decide where this file should go.
 		"temperature": 0.1,
 	}
 
+	return l.sendRequest(chatReq)
+}
+
+func (l *LMStudioBackend) sendRequest(chatReq map[string]interface{}) (TagResponse, error) {
 	reqBytes, _ := json.Marshal(chatReq)
 	httpReq, _ := http.NewRequest("POST", l.Host+"/v1/chat/completions", bytes.NewBuffer(reqBytes))
 	httpReq.Header.Set("Content-Type", "application/json")
