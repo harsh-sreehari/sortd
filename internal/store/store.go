@@ -103,9 +103,12 @@ func (s *Store) RecentLog(n int) ([]LogEntry, error) {
 	var entries []LogEntry
 	for rows.Next() {
 		var e LogEntry
-		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Filename, &e.OriginalFilename, &e.Source, &e.Destination, &e.Tier, &e.Confidence, &e.Tags, &e.Action, &e.Reasoning, &e.Corrected); err != nil {
+		var origName, reason sql.NullString
+		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Filename, &origName, &e.Source, &e.Destination, &e.Tier, &e.Confidence, &e.Tags, &e.Action, &reason, &e.Corrected); err != nil {
 			return nil, err
 		}
+		e.OriginalFilename = origName.String
+		e.Reasoning = reason.String
 		entries = append(entries, e)
 	}
 	return entries, nil
@@ -123,9 +126,12 @@ func (s *Store) UnsortedFiles() ([]LogEntry, error) {
 	var entries []LogEntry
 	for rows.Next() {
 		var e LogEntry
-		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Filename, &e.OriginalFilename, &e.Source, &e.Destination, &e.Tier, &e.Confidence, &e.Tags, &e.Action, &e.Reasoning, &e.Corrected); err != nil {
+		var origName, reason sql.NullString
+		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Filename, &origName, &e.Source, &e.Destination, &e.Tier, &e.Confidence, &e.Tags, &e.Action, &reason, &e.Corrected); err != nil {
 			return nil, err
 		}
+		e.OriginalFilename = origName.String
+		e.Reasoning = reason.String
 		entries = append(entries, e)
 	}
 	return entries, nil
@@ -169,9 +175,12 @@ func (s *Store) SearchLog(n int, filters map[string]string) ([]LogEntry, error) 
 	var entries []LogEntry
 	for rows.Next() {
 		var e LogEntry
-		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Filename, &e.OriginalFilename, &e.Source, &e.Destination, &e.Tier, &e.Confidence, &e.Tags, &e.Action, &e.Reasoning, &e.Corrected); err != nil {
+		var origName, reason sql.NullString
+		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Filename, &origName, &e.Source, &e.Destination, &e.Tier, &e.Confidence, &e.Tags, &e.Action, &reason, &e.Corrected); err != nil {
 			return nil, err
 		}
+		e.OriginalFilename = origName.String
+		e.Reasoning = reason.String
 		entries = append(entries, e)
 	}
 	return entries, nil
