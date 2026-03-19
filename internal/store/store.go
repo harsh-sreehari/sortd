@@ -2,9 +2,11 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"os"
+	"path/filepath"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -13,27 +15,31 @@ type Store struct {
 }
 
 type LogEntry struct {
-	ID          int
-	Timestamp   string
-	Filename    string
-	Source      string
-	Destination string
-	Tier        int
-	Confidence  float64
-	Tags        string
-	Action      string
-	Corrected   int
+	ID               int
+	Timestamp        string
+	Filename         string
+	OriginalFilename string
+	Source           string
+	Destination      string
+	Tier             int
+	Confidence       float64
+	Tags             string
+	Action           string
+	Reasoning        string
+	Corrected        int
 }
 
 // Decision representation placeholder
 type Decision struct {
-	File        string
-	Destination string
-	Tags        []string
-	Tier        int
-	Confidence  float64
-	IsNewFolder bool
-	Action      string
+	File             string
+	OriginalFilename string
+	Destination      string
+	Tags             []string
+	Tier             int
+	Confidence       float64
+	IsNewFolder      bool
+	Action           string
+	Reasoning        string
 }
 
 func Open(dbPath string) (*Store, error) {
@@ -52,22 +58,35 @@ func Open(dbPath string) (*Store, error) {
 		}
 	}
 
+	// Safe column additions for existing databases
+	_, _ = db.Exec("ALTER TABLE sort_log ADD COLUMN original_filename TEXT NOT NULL DEFAULT ''")
+	_, _ = db.Exec("ALTER TABLE sort_log ADD COLUMN reasoning TEXT")
+
 	return &Store{db: db}, nil
 }
 
 func (s *Store) LogDecision(d Decision) error {
-	query := `INSERT INTO sort_log (timestamp, filename, source, destination, tier, confidence, tags, action) 
-			  VALUES (datetime('now'), ?, ?, ?, ?, ?, ?, ?)`
-	tags := ""
+	query := `INSERT INTO sort_log (timestamp, filename, original_filename, source, destination, tier, confidence, tags, action, reasoning) 
+			  VALUES (datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	
+	tags := "[]"
 	if len(d.Tags) > 0 {
-		tags = d.Tags[0] // Simplify tags
+		if b, err := json.Marshal(d.Tags); err == nil {
+			tags = string(b)
+		}
 	}
-	_, err := s.db.Exec(query, d.File, d.File, d.Destination, d.Tier, d.Confidence, tags, d.Action)
+
+	orig := d.OriginalFilename
+	if orig == "" {
+		orig = d.File
+	}
+
+	_, err := s.db.Exec(query, d.File, orig, d.File, d.Destination, d.Tier, d.Confidence, tags, d.Action, d.Reasoning)
 	return err
 }
 
 func (s *Store) RecentLog(n int) ([]LogEntry, error) {
-	query := `SELECT id, timestamp, filename, source, destination, tier, confidence, tags, action, corrected 
+	query := `SELECT id, timestamp, filename, original_filename, source, destination, tier, confidence, tags, action, reasoning, corrected 
 			  FROM sort_log ORDER BY id DESC LIMIT ?`
 	rows, err := s.db.Query(query, n)
 	if err != nil {
@@ -78,7 +97,7 @@ func (s *Store) RecentLog(n int) ([]LogEntry, error) {
 	var entries []LogEntry
 	for rows.Next() {
 		var e LogEntry
-		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Filename, &e.Source, &e.Destination, &e.Tier, &e.Confidence, &e.Tags, &e.Action, &e.Corrected); err != nil {
+		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Filename, &e.OriginalFilename, &e.Source, &e.Destination, &e.Tier, &e.Confidence, &e.Tags, &e.Action, &e.Reasoning, &e.Corrected); err != nil {
 			return nil, err
 		}
 		entries = append(entries, e)

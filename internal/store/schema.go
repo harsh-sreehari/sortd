@@ -3,16 +3,18 @@ package store
 const (
 	SortLogSchema = `
 CREATE TABLE IF NOT EXISTS sort_log (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp   TEXT NOT NULL,
-    filename    TEXT NOT NULL,
-    source      TEXT NOT NULL,
-    destination TEXT NOT NULL,
-    tier        INTEGER NOT NULL,
-    confidence  REAL NOT NULL,
-    tags        TEXT,
-    action      TEXT NOT NULL,
-    corrected   INTEGER DEFAULT 0
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp         TEXT NOT NULL,
+    filename          TEXT NOT NULL,
+    original_filename TEXT NOT NULL,
+    source            TEXT NOT NULL,
+    destination       TEXT NOT NULL,
+    tier              INTEGER NOT NULL,
+    confidence        REAL NOT NULL,
+    tags              TEXT,
+    action            TEXT NOT NULL,
+    reasoning         TEXT,
+    corrected         INTEGER DEFAULT 0
 );`
 
 	FolderIndexSchema = `
