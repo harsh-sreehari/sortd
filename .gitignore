@@ -20,6 +20,12 @@ docs/
 .gemini/
 adapters/
 scripts/
+model_capabilities.yml
+*.yml
+*.yaml
+# Except for GitHub Actions
+!.github/workflows/*.yml
+!.github/workflows/*.yaml
 
 # Config & secrets
 *.env

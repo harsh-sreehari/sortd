@@ -1,132 +1,96 @@
-# sortd — Intelligent File Organizer Daemon
+# 🌌 Sortd: Intelligent Context-Aware Organizer
 
-> An autonomous background daemon that watches your directories and moves files exactly where they belong — using a multi-tier AI decision engine powered by a local LLM.
+> **"Your digital life, autonomously organized."**
 
----
-
-## How It Works
-
-`sortd` uses a **3-tier decision pipeline** on every incoming file:
-
-| Tier | Method | Example |
-|------|--------|---------|
-| **1 — Rules** | Instant extension matching | `.deb` → `Software/`, `.crdownload` → skip |
-| **2 — Fuzzy** | Keyword overlap against your folder index | `CST302_COMPILER_DESIGN.pdf` → `Documents/College/Notes/Compiler Design/` |
-| **3 — LLM** | Local LLM content analysis for ambiguous files | Image with chart → `Research/Charts/` |
-
-If confidence is too low at all 3 tiers, the file is **safely parked** in `.unsorted/` for you to review manually — nothing ever gets silently lost.
+`sortd` is a lightweight, background daemon that monitors your messy directories and uses a multi-tier AI engine to put files exactly where they belong. No more hunting for that one PDF in a sea of downloads.
 
 ---
 
-## Installation
+## 🚀 Why sortd?
 
-### Prerequisites
-- [Go 1.21+](https://go.dev/dl/)
-- A running [LM Studio](https://lmstudio.ai/) instance (or any OpenAI-compatible local API)
+Most file organizers rely on simple extension rules. `sortd` goes deeper. It understands **context**. 
 
-### Install
+- 🏎️ **Speed**: Immediate organization for known file types (ISO, DEB, APK).
+- 🧠 **Intelligence**: Uses keyword-overlap to find existing folders (e.g., `compiler_design.pdf` → `College/Notes/Compiler Design`).
+- 👁️ **Vision (LLM)**: When logic fails, sortd uses a local LLM (like `qwen3-VL-4b`) to see what the file actually is.
+- 🛡️ **Zero-Loss Safety**: Unsure about a file? We **park** it in `.unsorted/`. We never delete or misplace based on a guess.
+
+---
+
+## 📥 Installation
 
 ```bash
+# Clone and install with one command
 git clone https://github.com/harsh-sreehari/sortd.git
 cd sortd
 make install
 ```
 
-This builds the binary and registers the `sortd` daemon as a **systemd user service** that starts automatically on login.
-
-> **Or install without `make`:**
-> ```bash
-> go install ./cmd/sortd/...
-> systemctl --user enable sortd --now
-> ```
+This builds the binary and registers the `sortd` systemd service so it starts automatically when you log in.
 
 ---
 
-## First Run
+## 🛠️ Getting Started
 
-### 1. Index your folders
-
-Before sortd can place files intelligently, it needs to scan your existing folder tree:
+### 1. Build the "Brain" 🧠
+Before `sortd` can be smart, it needs to learn your current folder taxonomy:
 
 ```bash
 sortd index
 ```
+*Run this anytime you create new important folders in your Documents or Desktop.*
 
-This crawls your `~/Documents`, `~/Desktop`, and `~/Downloads` directories and builds a local keyword index. Run this again anytime you reorganise your folders.
-
-### 2. Verify the daemon is running
+### 2. Manual Sort 🏃
+Force a pass over all your watched folders:
 
 ```bash
-systemctl --user status sortd
+sortd run
 ```
 
-From this point on, any file dropped into your `~/Downloads` will be automatically organised.
+### 3. Check the Logs 📜
+Wondering why a file moved? See the history:
+
+```bash
+sortd log
+```
+
+### 4. Human-In-The-Loop 👩‍💻
+Handle those tricky "Parked" files in `.unsorted/` interactively:
+
+```bash
+sortd review
+```
 
 ---
 
-## CLI Reference
+## ⚙️ Configuration
 
-| Command | Description |
-|---------|-------------|
-| `sortd run` | Manually trigger a sort pass on all watched folders |
-| `sortd index` | Re-crawl and rebuild the folder keyword index |
-| `sortd log` | Show the last 20 file move decisions |
-| `sortd review` | Interactively map files parked in `.unsorted/` |
-| `sortd daemon start` | Start the background file watcher |
-
----
-
-## Configuration
-
-Config is auto-created at `~/.config/sortd/config.toml` on first run.
+Located at `~/.config/sortd/config.toml`.
 
 ```toml
 [watch]
-# Directories to monitor
 folders = ["/home/user/Downloads"]
 
 [llm]
-# Your local LLM API endpoint (LM Studio, Ollama, etc.)
-host  = "http://localhost:1234"
+host  = "http://localhost:1234" # LM Studio / Ollama
 model = "qwen3-VL-4b"
 
 [behaviour]
-# Minimum confidence (0.0–1.0) before a file is moved instead of parked
 confidence_threshold = 0.75
-db_path = "~/.local/share/sortd/sortd.db"
-```
-
-### Changing your LLM model
-
-`sortd` works with any model exposed through an OpenAI-compatible API. After updating `config.toml`, restart the daemon:
-
-```bash
-systemctl --user restart sortd
 ```
 
 ---
 
-## Where are my files?
+## 🪵 Folder Guide
 
-| Scenario | Location |
-|----------|----------|
-| File moved automatically | Inside your `~/Documents` subfolder hierarchy |
-| File was uncertain | `~/Downloads/.unsorted/` — run `sortd review` to handle |
-| Decision history | `~/.local/share/sortd/sortd.db` (view via `sortd log`) |
-
----
-
-## Uninstall
-
-```bash
-systemctl --user disable sortd --now
-rm ~/.config/sortd/config.toml
-rm -rf ~/.local/share/sortd/
-rm ~/go/bin/sortd
-```
+| Type | Destination |
+|------|-------------|
+| **Rule Match** | Root categories (`Software/`, `Documents/`) |
+| **Fuzzy Match** | Existing deep hierarchies (`College/CS/Year3/...`) |
+| **Ambiguous** | `~/Downloads/.unsorted/` (Hidden by default) |
 
 ---
 
-## License
+## 📄 License
 
-MIT — see [LICENSE](LICENSE).
+MIT © 2026 Harsh Sreehari. Built with ❤️ for organized humans.
