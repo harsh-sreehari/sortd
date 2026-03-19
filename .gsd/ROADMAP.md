@@ -23,7 +23,7 @@
 **Objective**: Add `original_filename` and `reasoning` columns to SQLite schema. Fix `store.LogDecision` tag handling. Add helper methods (`UnsortedFiles`, `MarkCorrected`).
 
 ### Phase 2: Pipeline Fixes & Maint
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 **Objective**: Fix Tier 1 "Software/" action string in pipeline. Ensure `sortd.service` has the correct `After=` dependency (e.g., `network.target` or whatever is appropriate). Set up PID file creation.
 
 ### Phase 3: Core Commands
