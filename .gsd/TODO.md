@@ -25,7 +25,8 @@
 
 <!-- Active todos below -->
 
-- [ ] {Example todo item} `medium` — YYYY-MM-DD
+- [ ] Refactor ANSI color codes into a `ui` or `cli` helper package. `low` — 2026-03-19
+- [ ] Optimize folder crawling for very large home directories (caching needed). `medium` — 2026-03-19
 
 ---
 
