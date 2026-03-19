@@ -1,11 +1,11 @@
 ## Current Position
-- **Phase**: 7 (completed)
-- **Task**: Stabilization & Vision complete
-- **Status**: Verified
+- **Phase**: 8 (completed)
+- **Task**: Milestone v1.5.0 finalized and archived
+- **Status**: **STABLE READY** ✅
 
 ## Last Session Summary
-Resolved the "Quick Move" loop bug and the "Review Ghost" bug. Successfully implemented Vision-based OCR for images (works with Qwen-VL). Added WRITE-event debouncing to the Watcher to prevent premature sorting of slow downloads.
+**Milestone v1.5.0 Complete**. Vision, Stability, and AI Teaching are fully integrated and verified. The CLI core is now feature-complete for advanced file organization.
 
 ## Next Steps
-1. Prepare for Phase 8 (Advanced CLI Steering).
-2. Implement `sortd rename` (AI-suggested names).
+1. All planned phases from previous Roadmap are complete.
+2. Review the proposed **v2.0.0 Roadmap** (Global Intelligence & Web UI).
