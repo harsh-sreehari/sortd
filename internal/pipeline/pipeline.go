@@ -53,7 +53,8 @@ func (p *Pipeline) Process(path string) Decision {
 	// Tier 3: LLM
 	{
 		tree, _ := p.Graph.GetAllPaths()
-		if decision, match = MatchTier3(path, p.LLM, tree, p.AllowedRoots, p.cfg.Behaviour.ConfidenceThreshold); match {
+		affinities, _ := p.Store.GetAffinities(nil)
+		if decision, match = MatchTier3(path, p.LLM, tree, p.AllowedRoots, p.cfg.Behaviour.ConfidenceThreshold, affinities); match {
 			goto Execution
 		}
 	}

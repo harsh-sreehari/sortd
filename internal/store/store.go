@@ -217,6 +217,43 @@ func (s *Store) MarkCorrected(id int, newDest string, folderMatch string) error 
 	return nil
 }
 
+func (s *Store) GetAffinities(tags []string) (map[string]float64, error) {
+	affinities := make(map[string]float64)
+
+	if len(tags) == 0 {
+		// General learning: top preferences
+		rows, err := s.db.Query("SELECT tag, folder, weight FROM affinities ORDER BY weight DESC LIMIT 20")
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var tag, folder string
+			var weight float64
+			if err := rows.Scan(&tag, &folder, &weight); err == nil {
+				affinities[fmt.Sprintf("%s->%s", tag, folder)] = weight
+			}
+		}
+		return affinities, nil
+	}
+
+	for _, tag := range tags {
+		rows, err := s.db.Query("SELECT folder, weight FROM affinities WHERE tag = ?", tag)
+		if err != nil {
+			continue
+		}
+		for rows.Next() {
+			var folder string
+			var weight float64
+			if err := rows.Scan(&folder, &weight); err == nil {
+				affinities[folder] += weight
+			}
+		}
+		rows.Close()
+	}
+	return affinities, nil
+}
+
 func (s *Store) AggregatedTags() ([]TagStat, error) {
 	query := "SELECT tags FROM sort_log WHERE tags IS NOT NULL AND tags != '[]'"
 	rows, err := s.db.Query(query)

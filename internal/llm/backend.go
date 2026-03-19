@@ -22,8 +22,9 @@ type TagRequest struct {
 	Filename     string   `json:"filename"`
 	Extension    string   `json:"extension"`
 	ContentPeek  string   `json:"content_peek,omitempty"`
-	FolderTree   []string `json:"folder_tree"`
-	AllowedRoots []string `json:"allowed_roots"`
+	FolderTree   []string           `json:"folder_tree"`
+	AllowedRoots []string           `json:"allowed_roots"`
+	Affinities   map[string]float64 `json:"affinities,omitempty"`
 }
 
 type LLMBackend interface {
@@ -178,12 +179,16 @@ EXISTING USER FOLDERS:
 PRIMARY CATEGORIES (Preferred):
 %v
 
+PAST USER PREFERENCES (Learned from your previous corrections):
+%v
+
 TASK:
 Decide where this file should go and suggest 1-3 appropriate tags.
 - Look for naming patterns in the EXISTING USER FOLDERS (e.g., if children of "College/" are named by subject, your suggestion for a missing subject should match that style).
 - You MUST prefer moving files into subfolders or siblings of the PRIMARY CATEGORIES.
 - If an existing folder matches based on the file's content (e.g., a specific college course), use it.
 - If the subject is new (e.g., a new course), suggest creating a new folder with a name that fits the sibling pattern.
+- If PAST USER PREFERENCES has relevant entries, they weigh heavily in your decision.
 - Return ONLY valid JSON in this format:
 {
   "destination": "Relative/Path/To/Folder/",
@@ -191,7 +196,7 @@ Decide where this file should go and suggest 1-3 appropriate tags.
   "is_new_folder": true/false,
   "confidence": 0.0-1.0,
   "reasoning": "brief explanation"
-}`, req.Filename, req.Extension, req.ContentPeek, req.FolderTree, req.AllowedRoots)
+}`, req.Filename, req.Extension, req.ContentPeek, req.FolderTree, req.AllowedRoots, req.Affinities)
 
 	chatReq := map[string]interface{}{
 		"model": l.Model,

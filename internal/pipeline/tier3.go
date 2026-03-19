@@ -8,7 +8,7 @@ import (
 	"github.com/harsh-sreehari/sortd/internal/peek"
 )
 
-func MatchTier3(path string, l llm.LLMBackend, folders []string, allowedRoots []string, threshold float64) (Decision, bool) {
+func MatchTier3(path string, l llm.LLMBackend, folders []string, allowedRoots []string, threshold float64, affinities map[string]float64) (Decision, bool) {
 	// 1. Peek content
 	content := peek.PeekDispatcher(path, l)
 
@@ -19,6 +19,7 @@ func MatchTier3(path string, l llm.LLMBackend, folders []string, allowedRoots []
 		ContentPeek:  content,
 		FolderTree:   folders,
 		AllowedRoots: allowedRoots,
+		Affinities:   affinities,
 	}
 
 	// 3. Ask LLM
