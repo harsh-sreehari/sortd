@@ -2,6 +2,7 @@ package llm
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -28,6 +29,8 @@ type TagRequest struct {
 type LLMBackend interface {
 	TagContent(req TagRequest) (TagResponse, error)
 	ResolveReview(userInput string, filename string, tree []string) (TagResponse, error)
+	DescribeImage(imageBytes []byte) (string, error)
+	SuggestRename(filename, content string) (string, error)
 }
 
 type LMStudioBackend struct {
@@ -66,6 +69,102 @@ Return ONLY valid JSON in this format:
 	return l.sendRequest(chatReq)
 }
 
+func (l *LMStudioBackend) DescribeImage(imageBytes []byte) (string, error) {
+	prompt := "What is in this image? Provide a brief but accurate description of the text and subject matter. Especially look for titles, student names, or subject names if it's a document."
+	
+	chatReq := map[string]interface{}{
+		"model": l.Model,
+		"messages": []map[string]interface{}{
+			{
+				"role": "user",
+				"content": []map[string]interface{}{
+					{"type": "text", "text": prompt},
+					{
+						"type":      "image_url",
+						"image_url": map[string]string{"url": "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(imageBytes)},
+					},
+				},
+			},
+		},
+		"temperature": 0.1,
+	}
+
+	reqBytes, _ := json.Marshal(chatReq)
+	httpReq, _ := http.NewRequest("POST", l.Host+"/v1/chat/completions", bytes.NewBuffer(reqBytes))
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if len(result.Choices) == 0 {
+		return "", fmt.Errorf("LMStudio: no choices in response")
+	}
+
+	return result.Choices[0].Message.Content, nil
+}
+
+func (l *LMStudioBackend) SuggestRename(filename, content string) (string, error) {
+	prompt := fmt.Sprintf(`Given the filename: "%s"
+And a snippet of its content/description: "%s"
+
+TASK:
+Suggest a clean, professional, and descriptive filename for this file. 
+- You MUST maintain the original file extension.
+- Use context-rich titles (e.g. "Algorithm_Homework_1.pdf" instead of "hw1.pdf").
+- Return ONLY the filename string, nothing else.`, filename, content)
+
+	chatReq := map[string]interface{}{
+		"model": l.Model,
+		"messages": []map[string]string{
+			{"role": "user", "content": prompt},
+		},
+		"temperature": 0.1,
+	}
+
+	reqBytes, _ := json.Marshal(chatReq)
+	httpReq, _ := http.NewRequest("POST", l.Host+"/v1/chat/completions", bytes.NewBuffer(reqBytes))
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var chatResp struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
+		return "", err
+	}
+
+	if len(chatResp.Choices) == 0 {
+		return "", fmt.Errorf("no response from LLM")
+	}
+
+	newName := strings.TrimSpace(chatResp.Choices[0].Message.Content)
+	newName = strings.Trim(newName, "\"`'") // Clean potential quotes
+	return newName, nil
+}
+
 func (l *LMStudioBackend) TagContent(req TagRequest) (TagResponse, error) {
 	// Build prompt
 	prompt := fmt.Sprintf(`You are a file organiser. 
@@ -81,9 +180,10 @@ PRIMARY CATEGORIES (Preferred):
 
 TASK:
 Decide where this file should go and suggest 1-3 appropriate tags.
-- You MUST prefer moving files into subfolders of the PRIMARY CATEGORIES.
-- If an existing folder matches perfectly, use it.
-- If you need a new subfolder, suggest it (e.g. "Documents/Personal/Tax").
+- Look for naming patterns in the EXISTING USER FOLDERS (e.g., if children of "College/" are named by subject, your suggestion for a missing subject should match that style).
+- You MUST prefer moving files into subfolders or siblings of the PRIMARY CATEGORIES.
+- If an existing folder matches based on the file's content (e.g., a specific college course), use it.
+- If the subject is new (e.g., a new course), suggest creating a new folder with a name that fits the sibling pattern.
 - Return ONLY valid JSON in this format:
 {
   "destination": "Relative/Path/To/Folder/",

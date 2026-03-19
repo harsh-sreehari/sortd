@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/harsh-sreehari/sortd/internal/llm"
 )
 
 func TextPeek(path string) string {
@@ -45,7 +47,21 @@ func PdfPeek(path string) string {
 	return content
 }
 
-func PeekDispatcher(path string) string {
+func ImagePeek(path string, l llm.LLMBackend) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+
+	desc, err := l.DescribeImage(data)
+	if err != nil {
+		return ""
+	}
+
+	return desc
+}
+
+func PeekDispatcher(path string, l llm.LLMBackend) string {
 	ext := strings.ToLower(filepath.Ext(path))
 
 	switch ext {
@@ -53,6 +69,8 @@ func PeekDispatcher(path string) string {
 		return PdfPeek(path)
 	case ".txt", ".md", ".rst", ".tex", ".go", ".py":
 		return TextPeek(path)
+	case ".jpg", ".jpeg", ".png", ".webp", ".bmp":
+		return ImagePeek(path, l)
 	default:
 		return ""
 	}

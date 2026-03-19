@@ -10,7 +10,7 @@ import (
 
 func MatchTier3(path string, l llm.LLMBackend, folders []string, allowedRoots []string, threshold float64) (Decision, bool) {
 	// 1. Peek content
-	content := peek.PeekDispatcher(path)
+	content := peek.PeekDispatcher(path, l)
 
 	// 2. Prepare request
 	req := llm.TagRequest{

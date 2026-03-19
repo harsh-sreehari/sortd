@@ -40,30 +40,32 @@ Enhance the CLI with the ability to suggest clean filenames based on content and
   </files>
   <action>
     - Add a `rename` subcommand to the sortd CLI.
-    - Usage: `sortd rename <path>` (AI-suggested) or `sortd rename <path> <newname>` (manual).
-    - If manual, call `mover.Move(path, newname)`.
-    - If AI-suggested:
-        - Call `SuggestRename` via the LLM.
-        - Show the suggestion: "Rename to 'new_name.ext'? [Y/n]".
-        - If confirmed, execute the move.
+    - Usage: `sortd rename <path>`.
+    - AI-suggested behavior:
+        - Peek at content and call `SuggestRename`.
+        - Prompt user: "Rename to 'Context_Rich_Name.ext'? [Y/n/edit]".
+        - If the name already exists, the AI is asked for a *different* descriptive name instead of using suffixes (`_1`).
+    - Move should happen atomically via `mover.Move`.
   </action>
-  <verify>sortd rename --help</verify>
-  <done>Command exists and renames files correctly.</done>
+  <verify>sortd rename mystery_blob.bin</verify>
+  <done>Renames using descriptive context-rich titles.</done>
 </task>
 
 <task type="auto">
-  <name>Implement sortd tutor command</name>
+  <name>Implement "Teaching" (Affinities) Logic</name>
   <files>
-    - cmd/sortd/main.go
+    - internal/llm/backend.go
+    - internal/store/store.go
+    - internal/pipeline/tier3.go
   </files>
   <action>
-    - Add a `tutor <query>` subcommand.
-    - It should search for the last log entry matching the query.
-    - Display the tier, tags, and reasoning.
-    - Call the LLM with a "tutor prompt": "A user is confused why this file was moved here. Based on the reasoning '{reasoning}', explain in 2-3 sentences the logic behind this classification."
+    - Ensure `MarkCorrected` in `store.go` captures the user's manual correction intent.
+    - In `MatchTier3`, fetch the `affinities` from the DB for the current file's tags/type.
+    - Include these as "Past Lessons" in the LLM prompt: "In the past, the user manually moved files with similar content/tags to: [Folders]".
+    - This biases the AI toward user-taught destinations.
   </action>
-  <verify>sortd tutor mystery_blob</verify>
-  <done>Explains the sorting logic conversationally.</done>
+  <verify>sortd review (and check if subsequent similar files follow the learned path)</verify>
+  <done>User corrections improve future AI suggestions.</done>
 </task>
 
 ## Success Criteria

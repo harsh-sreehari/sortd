@@ -60,6 +60,12 @@ func TokenisePath(folderName string) []string {
 }
 
 func (g *Graph) Crawl(roots []string, ignore []string) error {
+	// 0. Wipe existing index to prevent "ghost" folders
+	_, err := g.Store.DB().Exec("DELETE FROM folder_index")
+	if err != nil {
+		log.Printf("Failed to clear index: %v", err)
+	}
+
 	for _, root := range roots {
 		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 			if err != nil {

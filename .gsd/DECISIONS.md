@@ -45,7 +45,21 @@ What other options were evaluated?
 
 ### Constraints
 - **User Identity**: Operations should use the identity of `harsh-sreehari`.
-<!-- Add new decisions below -->
+### Phase 8 Decisions
+
+**Date:** 2026-03-20
+
+### Scope
+- **Renaming**: Context-Rich renaming (Option B). AI will generate descriptive names based on content analysis (e.g. `Scan_001.jpg` -> `College_AlgorithmAnalysis_Quiz.jpg`).
+- **Learning**: Scrapped the `tutor` command in favor of **Teaching Mode**. Corrected moves in `sortd review` will now feed the `affinities` table to bias future LLM decisions for similar file patterns.
+- **Pruning**: Added safety checks to ensure root drives/folders are accessible before pruning missing records.
+
+### Approach
+- **Rename Logic**: Always suggest to user first. If the file exists, the AI should suggest a *different* name instead of just appending `_1`.
+- **Affinities**: Used as "In-Context Examples" or "Reinforcement Prompting" in Tier 3.
+
+### Constraints
+- **Concurrency**: Re-runs `sortd index` cleanup to ensure real-time accuracy after manual corrections.
 
 ---
 

@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"fmt"
 	"path/filepath"
 
 	"github.com/harsh-sreehari/sortd/internal/graph"
@@ -33,7 +34,7 @@ func MatchTier2(path string, folders []graph.FolderIndex) (Decision, bool) {
 			Confidence:  bestScore,
 			Tier:        2,
 			Action:      "moved",
-			Reasoning:   "Tier 2: Fuzzy similarity match",
+			Reasoning:   fmt.Sprintf("Tier 2: Fuzzy match on folder '%s' (score %.2f)", filepath.Base(bestFolder), bestScore),
 		}, true
 	}
 

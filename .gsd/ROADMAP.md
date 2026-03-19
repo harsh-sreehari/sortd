@@ -63,4 +63,4 @@
 
 ### Phase 8: Advanced CLI Steering
 **Status**: ⬜ Not Started
-**Objective**: Implement `sortd rename` (one-shot AI rename). Add `sortd tutor` to explain why a file went somewhere. Implement global pruning.
+**Objective**: Implement context-rich `sortd rename` (AI-suggested names). Implement "Teaching Mode" by feeding user feedback into the AI's future prompts. Implement global pruning.

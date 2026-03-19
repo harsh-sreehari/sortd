@@ -447,7 +447,13 @@ var reviewCmd = &cobra.Command{
 				continue
 			}
 
-			finalPath, err := pipe.Mover.Move(entry.Filename, dest)
+			// Use Destination if it was successfuly moved/parked, otherwise Filename
+			srcPath := entry.Filename
+			if entry.Action == "parked" || entry.Action == "moved" {
+				srcPath = entry.Destination
+			}
+
+			finalPath, err := pipe.Mover.Move(srcPath, dest)
 			if err != nil {
 				fmt.Printf("❌ Failed to move: %v\n", err)
 			} else {
@@ -480,6 +486,9 @@ func runIndex() {
 		filepath.Join(home, "Documents"),
 		filepath.Join(home, "Desktop"),
 		filepath.Join(home, "Downloads"),
+		filepath.Join(home, "Pictures"),
+		filepath.Join(home, "Videos"),
+		filepath.Join(home, "Music"),
 	}
 	
 	fmt.Printf("Re-indexing your folders in: %v...\n", roots)
