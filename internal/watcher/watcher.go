@@ -55,9 +55,10 @@ func (w *Watcher) eventLoop(ctx context.Context) {
 			if !ok {
 				return
 			}
-			// We only care about CREATE and RENAME
 			if event.Has(fsnotify.Create) || event.Has(fsnotify.Rename) {
-				w.handleEvent(event.Name)
+				w.handleEvent(event.Name, false)
+			} else if event.Has(fsnotify.Write) {
+				w.handleEvent(event.Name, true)
 			}
 		case err, ok := <-w.fsWatcher.Errors:
 			if !ok {
@@ -71,7 +72,7 @@ func (w *Watcher) eventLoop(ctx context.Context) {
 	}
 }
 
-func (w *Watcher) handleEvent(path string) {
+func (w *Watcher) handleEvent(path string, isWrite bool) {
 	// Filtering
 	if w.shouldFilter(path) {
 		return
@@ -84,16 +85,19 @@ func (w *Watcher) handleEvent(path string) {
 		return
 	}
 
-	// Debounce
 	w.timersMu.Lock()
 	defer w.timersMu.Unlock()
 
-	if timer, ok := w.debounceMs[absPath]; ok {
+	timer, exists := w.debounceMs[absPath]
+	if isWrite && !exists {
+		return
+	}
+
+	if exists {
 		timer.Stop()
 	}
 
 	w.debounceMs[absPath] = time.AfterFunc(time.Duration(w.cfg.Behaviour.DebounceSeconds)*time.Second, func() {
-		// Verify file still exists and is NOT a directory
 		if info, err := os.Stat(absPath); err == nil && !info.IsDir() {
 			w.Out <- absPath
 		}
