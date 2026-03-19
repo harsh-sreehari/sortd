@@ -62,5 +62,5 @@
 **Objective**: Re-calculate debounce on WRITE events to handle slow browsers/compilers. Fix `sortd review` source path bugs for parked files.
 
 ### Phase 8: Advanced CLI Steering
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 **Objective**: Implement context-rich `sortd rename` (AI-suggested names). Implement "Teaching Mode" by feeding user feedback into the AI's future prompts. Implement global pruning.
