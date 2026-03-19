@@ -80,7 +80,7 @@ Execution:
 	var finalPath string
 	var err error
 
-	if decision.Action == "moved" || decision.Action == "Software/" {
+	if decision.Action == "moved" {
 		dest := decision.Destination
 		if !filepath.IsAbs(dest) {
 			// Resolve relative paths to Home

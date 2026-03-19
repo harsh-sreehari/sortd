@@ -118,7 +118,7 @@ var runCmd = &cobra.Command{
 
 				decision := pipe.Process(path)
 				switch decision.Action {
-				case "moved", "Software/":
+				case "moved":
 					moved++
 				case "parked":
 					parked++

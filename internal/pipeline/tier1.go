@@ -23,7 +23,7 @@ type Rule struct {
 
 var Tier1Rules = []Rule{
 	// Software
-	{Extensions: []string{".appimage", ".deb", ".rpm", ".flatpak", ".iso", ".exe", ".msi"}, Destination: "Software/"},
+	{Extensions: []string{".appimage", ".deb", ".rpm", ".flatpak", ".iso", ".exe", ".msi"}, Destination: "Software/", Action: "moved"},
 	// Skip rules
 	{Extensions: []string{".crdownload", ".part", ".tmp", ".download", ".torrent"}, Action: "skipped"},
 }
