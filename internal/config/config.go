@@ -104,18 +104,21 @@ func writeDefaultConfig(path string) error {
 	home, _ := os.UserHomeDir()
 	
 	defaultCfg := fmt.Sprintf(`[watch]
-folders = ["%s/Downloads"]
+# Directives to monitor
+folders = ["%[1]s/Downloads"]
 
 [llm]
+# Your local LLM endpoint (LM Studio/Ollama)
 host = "http://localhost:1234"
-model = "lmstudio-community/Meta-Llama-3-8B-Instruct-GGUF"
+model = "qwen3-VL-4b"
 
 [behaviour]
+# Minimum confidence (0.0-1.0) before a move is performed
 confidence_threshold = 0.75
 create_folders = true
-db_path = "%s/.local/share/sortd/sortd.db"
-log_path = "%s/.local/share/sortd/sortd.log"
-`, home, home, home)
+db_path = "%[1]s/.local/share/sortd/sortd.db"
+log_path = "%[1]s/.local/share/sortd/sortd.log"
+`, home)
 
 	return os.WriteFile(path, []byte(defaultCfg), 0644)
 }

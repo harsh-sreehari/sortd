@@ -8,16 +8,17 @@ import (
 	"github.com/harsh-sreehari/sortd/internal/peek"
 )
 
-func MatchTier3(path string, l llm.LLMBackend, folders []string) (Decision, bool) {
+func MatchTier3(path string, l llm.LLMBackend, folders []string, allowedRoots []string) (Decision, bool) {
 	// 1. Peek content
 	content := peek.PeekDispatcher(path)
 
 	// 2. Prepare request
 	req := llm.TagRequest{
-		Filename:    filepath.Base(path),
-		Extension:   filepath.Ext(path),
-		ContentPeek: content,
-		FolderTree:  folders,
+		Filename:     filepath.Base(path),
+		Extension:    filepath.Ext(path),
+		ContentPeek:  content,
+		FolderTree:   folders,
+		AllowedRoots: allowedRoots,
 	}
 
 	// 3. Ask LLM

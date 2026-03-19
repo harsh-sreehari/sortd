@@ -9,6 +9,8 @@ import (
 	"github.com/harsh-sreehari/sortd/internal/llm"
 	"github.com/harsh-sreehari/sortd/internal/mover"
 	"github.com/harsh-sreehari/sortd/internal/store"
+	"os"
+	"strings"
 )
 
 type Pipeline struct {
@@ -17,6 +19,7 @@ type Pipeline struct {
 	Graph  *graph.Graph
 	LLM    llm.LLMBackend
 	Mover  *mover.Mover
+	AllowedRoots []string
 }
 
 func New(cfg *config.Config, s *store.Store, g *graph.Graph, l llm.LLMBackend, m *mover.Mover) *Pipeline {
@@ -26,6 +29,7 @@ func New(cfg *config.Config, s *store.Store, g *graph.Graph, l llm.LLMBackend, m
 		Graph: g,
 		LLM:   l,
 		Mover: m,
+		AllowedRoots: []string{"Downloads/", "Documents/", "Videos/", "Pictures/", "Music/"},
 	}
 }
 
@@ -49,7 +53,7 @@ func (p *Pipeline) Process(path string) Decision {
 	// Tier 3: LLM
 	{
 		tree, _ := p.Graph.GetAllPaths()
-		if decision, match = MatchTier3(path, p.LLM, tree); match {
+		if decision, match = MatchTier3(path, p.LLM, tree, p.AllowedRoots); match {
 			goto Execution
 		}
 	}
@@ -79,9 +83,29 @@ Execution:
 	if decision.Action == "moved" || decision.Action == "Software/" {
 		dest := decision.Destination
 		if !filepath.IsAbs(dest) {
-			parent := filepath.Dir(root)
-			dest = filepath.Join(parent, dest)
+			// Resolve relative paths to Home
+			home, _ := os.UserHomeDir()
+			
+			// Validate restriction: Must start with one of the allowed categories
+			isAllowed := false
+			for _, a := range p.AllowedRoots {
+				if strings.HasPrefix(strings.ToLower(dest), strings.ToLower(a)) {
+					isAllowed = true
+					break
+				}
+			}
+
+			if !isAllowed && decision.Tier == 3 {
+				// LLM tried to go outside allowed roots (e.g. "Research/")
+				// Force it into Documents/
+				dest = filepath.Join("Documents/", dest)
+			}
+
+			dest = filepath.Join(home, dest)
 		}
+		
+		// ALWAYS join filename to the destination to ensure it stays a directory
+		dest = filepath.Join(dest, filepath.Base(path))
 		finalPath, err = p.Mover.Move(path, dest)
 	} else {
 		finalPath, err = p.Mover.Park(path, root)

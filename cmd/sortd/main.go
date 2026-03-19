@@ -153,18 +153,16 @@ var logCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Printf("%-20s | %-10s | %-30s | %-10s | %s\n", "Timestamp", "Action", "Filename", "Tier", "Destination")
-		fmt.Println(strings.Repeat("-", 100))
+		fmt.Printf("%-20s | %-10s | %-40s | %-8s | %s\n", "Timestamp", "Action", "Filename", "Tier", "Destination")
+		fmt.Println(strings.Repeat("-", 120))
 		for _, l := range logs {
 			base := filepath.Base(l.Filename)
-			if len(base) > 28 {
-				base = base[:25] + "..."
+			if len(base) > 38 {
+				base = base[:35] + "..."
 			}
 			dest := l.Destination
-			if len(dest) > 30 {
-				dest = "..." + dest[len(dest)-27:]
-			}
-			fmt.Printf("%-20s | %-10s | %-30s | Tier %-5d | %s\n", l.Timestamp, l.Action, base, l.Tier, dest)
+			// Give extra room for destination
+			fmt.Printf("%-20s | %-10s | %-40s | Tier %-2d | %s\n", l.Timestamp, l.Action, base, l.Tier, dest)
 		}
 	},
 }
