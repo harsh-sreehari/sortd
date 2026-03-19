@@ -91,8 +91,16 @@ func (g *Graph) Crawl(roots []string, ignore []string) error {
 			}
 
 			// Store in index
-			// Placeholder: db.Exec("INSERT OR REPLACE INTO folder_index...")
-			log.Printf("Indexing folder %s: %v", path, tokens)
+			keywords := strings.Join(tokens, ",")
+			
+			// Get parent folder if any
+			parent := filepath.Dir(path)
+			depth := len(strings.Split(path, string(filepath.Separator)))
+
+			_, err = g.Store.DB().Exec("INSERT OR REPLACE INTO folder_index (path, keywords, depth, parent) VALUES (?, ?, ?, ?)", path, keywords, depth, parent)
+			if err != nil {
+				log.Printf("Failed to index folder %s: %v", path, err)
+			}
 			return nil
 		})
 
@@ -101,4 +109,42 @@ func (g *Graph) Crawl(roots []string, ignore []string) error {
 		}
 	}
 	return nil
+}
+
+func (g *Graph) GetAllPaths() ([]string, error) {
+	rows, err := g.Store.DB().Query("SELECT path FROM folder_index")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var paths []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		paths = append(paths, p)
+	}
+	return paths, nil
+}
+
+func (g *Graph) GetFolderIndices() ([]FolderIndex, error) {
+	rows, err := g.Store.DB().Query("SELECT path, keywords, depth FROM folder_index")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var indices []FolderIndex
+	for rows.Next() {
+		var f FolderIndex
+		var keywordsStr string
+		if err := rows.Scan(&f.Path, &keywordsStr, &f.Depth); err != nil {
+			return nil, err
+		}
+		f.Keywords = strings.Split(keywordsStr, ",")
+		indices = append(indices, f)
+	}
+	return indices, nil
 }

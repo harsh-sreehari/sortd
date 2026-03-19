@@ -35,6 +35,11 @@ func (m *Mover) GenerateUniquePath(dest string) string {
 }
 
 func (m *Mover) Move(src, dest string) (string, error) {
+	// If dest is a directory or ends in a slash, append the file name
+	if info, err := os.Stat(dest); (err == nil && info.IsDir()) || strings.HasSuffix(dest, "/") {
+		dest = filepath.Join(dest, filepath.Base(src))
+	}
+
 	finalPath := m.GenerateUniquePath(dest)
 
 	destDir := filepath.Dir(finalPath)

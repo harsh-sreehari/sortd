@@ -225,7 +225,24 @@ var indexCmd = &cobra.Command{
 	Use:   "index",
 	Short: "Re-crawl the folder tree and rebuild the index",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Re-indexing folder tree...")
+		_, _, pipe, err := initPipeline()
+		if err != nil {
+			log.Fatalf("Init failed: %v", err)
+		}
+
+		home, _ := os.UserHomeDir()
+		roots := []string{
+			filepath.Join(home, "Documents"),
+			filepath.Join(home, "Desktop"),
+			filepath.Join(home, "Downloads"),
+		}
+		
+		fmt.Printf("Re-indexing your folders in: %v...\n", roots)
+		err = pipe.Graph.Crawl(roots, []string{"/node_modules", "/.git", "/.unsorted", "/.local", "/.cache", "/.gemini", "/.agent"})
+		if err != nil {
+			log.Fatalf("Crawl failed: %v", err)
+		}
+		fmt.Println("Indexing complete.")
 	},
 }
 

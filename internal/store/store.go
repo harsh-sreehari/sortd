@@ -94,6 +94,10 @@ func (s *Store) MarkCorrected(id int, newDest string) error {
 	return nil
 }
 
+func (s *Store) DB() *sql.DB {
+	return s.db
+}
+
 func (s *Store) Close() error {
 	if s.db != nil {
 		return s.db.Close()

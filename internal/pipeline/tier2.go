@@ -1,13 +1,13 @@
 package pipeline
 
 import (
-	"strings"
+	"path/filepath"
 
 	"github.com/harsh-sreehari/sortd/internal/graph"
 )
 
 func MatchTier2(path string, folders []graph.FolderIndex) (Decision, bool) {
-	filename := strings.ToLower(strings.TrimSuffix(path, ".pdf"))
+	filename := filepath.Base(path)
 	fileTokens := graph.TokenisePath(filename)
 
 	if len(fileTokens) == 0 {
@@ -18,14 +18,14 @@ func MatchTier2(path string, folders []graph.FolderIndex) (Decision, bool) {
 	bestFolder := ""
 
 	for _, folder := range folders {
-		score := calculateJaccard(fileTokens, folder.Keywords)
+		score := calculateOverlap(fileTokens, folder.Keywords)
 		if score > bestScore {
 			bestScore = score
 			bestFolder = folder.Path
 		}
 	}
 
-	threshold := 0.75 // Default confidence threshold
+	threshold := 0.40 // Lowered from 0.75 for better matching on multi-word paths
 	if bestScore >= threshold {
 		return Decision{
 			Path:        path,
@@ -40,22 +40,22 @@ func MatchTier2(path string, folders []graph.FolderIndex) (Decision, bool) {
 	return Decision{}, false
 }
 
-func calculateJaccard(a, b []string) float64 {
-	intersection := 0
-	setA := make(map[string]bool)
-	for _, s := range a {
-		setA[s] = true
+func calculateOverlap(fileTokens, folderKeywords []string) float64 {
+	if len(folderKeywords) == 0 {
+		return 0
 	}
 
-	for _, s := range b {
-		if setA[s] {
-			intersection++
+	matchCount := 0
+	fileSet := make(map[string]bool)
+	for _, t := range fileTokens {
+		fileSet[t] = true
+	}
+
+	for _, k := range folderKeywords {
+		if fileSet[k] {
+			matchCount++
 		}
 	}
 
-	union := len(a) + len(b) - intersection
-	if union == 0 {
-		return 0
-	}
-	return float64(intersection) / float64(union)
+	return float64(matchCount) / float64(len(folderKeywords))
 }

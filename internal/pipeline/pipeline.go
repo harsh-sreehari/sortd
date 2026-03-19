@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"log"
+	"path/filepath"
 
 	"github.com/harsh-sreehari/sortd/internal/config"
 	"github.com/harsh-sreehari/sortd/internal/graph"
@@ -39,15 +40,15 @@ func (p *Pipeline) Process(path string) Decision {
 
 	// Tier 2: Fuzzy (needs folder keywords)
 	{
-		folders := []graph.FolderIndex{} // Placeholder
-		if decision, match = MatchTier2(path, folders); match {
+		indices, _ := p.Graph.GetFolderIndices()
+		if decision, match = MatchTier2(path, indices); match {
 			goto Execution
 		}
 	}
 
 	// Tier 3: LLM
 	{
-		tree := p.cfg.Watch.Folders // Placeholder
+		tree, _ := p.Graph.GetAllPaths()
 		if decision, match = MatchTier3(path, p.LLM, tree); match {
 			goto Execution
 		}
@@ -77,7 +78,10 @@ Execution:
 
 	if decision.Action == "moved" || decision.Action == "Software/" {
 		dest := decision.Destination
-		// Ensure destination is absolute (for local tests/mocking)
+		if !filepath.IsAbs(dest) {
+			parent := filepath.Dir(root)
+			dest = filepath.Join(parent, dest)
+		}
 		finalPath, err = p.Mover.Move(path, dest)
 	} else {
 		finalPath, err = p.Mover.Park(path, root)
@@ -96,5 +100,11 @@ Execution:
 
 func (p *Pipeline) logDecision(d Decision) {
 	log.Printf("PIPELINE [%d] -> %s -> %s (%0.2f)", d.Tier, d.Action, d.Destination, d.Confidence)
-	// p.Store.LogDecision(d)
+	p.Store.LogDecision(store.Decision{
+		File:        d.Path,
+		Destination: d.Destination,
+		Tier:        d.Tier,
+		Confidence:  d.Confidence,
+		Action:      d.Action,
+	})
 }
