@@ -40,26 +40,27 @@
 
 ---
 
-## Milestone: v1.5.0 (Intelligence & Dashboard)
-**Goal**: provide a visual interface for log auditing and manual resolution, improve AI steering, and implement batch operations.
+## Milestone: v1.5.0 (Vision & Advanced Intelligence)
+**Goal**: Implement vision-assisted sorting, stabilize filesystem interactions, and provide advanced CLI steering.
 
 ## Must-Haves
-- [ ] Implement `sortd dashboard` command (Vite + React UI)
-- [ ] Log visualization in the dashboard with "Click to re-route" NLP support
-- [ ] Batch resolution of `.unsorted` via UI
-- [ ] Implement confidence threshold steering (via UI or config)
-- [ ] Add `sortd prune` to clean up logs or old index entries
+- [x] Implement Vision-capable "Peek" strategy for images (Qwen2-VL support)
+- [x] Stabilize Watcher with WRITE event debouncing (prevents premature sorting)
+- [x] Improved "New Folder" logic (Pattern awareness of sibling folders)
+- [x] Ghost folder prevention (Clearing index on re-crawl)
+- [ ] Add `sortd rename` subcommand for AI-suggested filenames
+- [ ] Implement `sortd prune` to clean records for missing files
 
 ## Phases
 
-### Phase 6: Web Dashboard Foundation
-**Status**: ⬜ Not Started
-**Objective**: Scaffold a Vite/React application inside `cmd/sortd/ui/`. Implement a local API in the daemon to serve logs and folder tree data. Register `sortd dashboard` to open the local server.
+### Phase 6: Vision & Intelligence Bridge
+**Status**: ✅ Complete
+**Objective**: Integrate `DescribeImage` into the pipeline. Ensure Tier 3 uses visual content for OCR and subject identification. Fix stale indexing (DELETE before CRAWL).
 
-### Phase 7: Interactive Log Resolution
-**Status**: ⬜ Not Started
-**Objective**: Implement "Quick Resolve" in the dashboard. Allow users to click a log entry and suggest a new folder via NLP, triggering an automated move and updating affinities.
+### Phase 7: Operational Stability
+**Status**: ✅ Complete
+**Objective**: Re-calculate debounce on WRITE events to handle slow browsers/compilers. Fix `sortd review` source path bugs for parked files.
 
-### Phase 8: Batch Intelligence
+### Phase 8: Advanced CLI Steering
 **Status**: ⬜ Not Started
-**Objective**: Implement multi-select in the dashboard for batch moving. Use the AI to cluster similar files and suggest bulk destinations.
+**Objective**: Implement `sortd rename` (one-shot AI rename). Add `sortd tutor` to explain why a file went somewhere. Implement global pruning.

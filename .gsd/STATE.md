@@ -1,11 +1,11 @@
 ## Current Position
-- **Phase**: 5 (completed)
-- **Task**: Milestone v1.2.0 complete
+- **Phase**: 7 (completed)
+- **Task**: Stabilization & Vision complete
 - **Status**: Verified
 
 ## Last Session Summary
-Phase 5 executed successfully. Conversational 'review' command implemented with fuzzy and LLM routing. Affinity loop established. Milestone v1.2.0 is fully delivered.
+Resolved the "Quick Move" loop bug and the "Review Ghost" bug. Successfully implemented Vision-based OCR for images (works with Qwen-VL). Added WRITE-event debouncing to the Watcher to prevent premature sorting of slow downloads.
 
 ## Next Steps
-1. Perform /audit-milestone
-2. Prepare for next milestone (v1.5.0)
+1. Prepare for Phase 8 (Advanced CLI Steering).
+2. Implement `sortd rename` (AI-suggested names).
