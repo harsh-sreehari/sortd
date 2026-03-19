@@ -35,12 +35,20 @@ func (m *Mover) GenerateUniquePath(dest string) string {
 }
 
 func (m *Mover) Move(src, dest string) (string, error) {
+	// Resolve absolute paths for comparison
+	srcAbs, _ := filepath.Abs(src)
+	destAbs, _ := filepath.Abs(dest)
+
 	// If dest is a directory or ends in a slash, append the file name
-	if info, err := os.Stat(dest); (err == nil && info.IsDir()) || strings.HasSuffix(dest, "/") {
-		dest = filepath.Join(dest, filepath.Base(src))
+	if info, err := os.Stat(destAbs); (err == nil && info.IsDir()) || strings.HasSuffix(dest, "/") {
+		destAbs = filepath.Join(destAbs, filepath.Base(srcAbs))
 	}
 
-	finalPath := m.GenerateUniquePath(dest)
+	if srcAbs == destAbs {
+		return srcAbs, nil
+	}
+
+	finalPath := m.GenerateUniquePath(destAbs)
 
 	destDir := filepath.Dir(finalPath)
 	if err := os.MkdirAll(destDir, 0755); err != nil {

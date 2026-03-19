@@ -118,6 +118,11 @@ Execution:
 	}
 
 	decision.Destination = finalPath
+	if decision.Action == "moved" && finalPath == path {
+		decision.Action = "skipped"
+		decision.Reasoning = "Already at destination"
+	}
+
 	p.logDecision(decision)
 	return decision
 }
