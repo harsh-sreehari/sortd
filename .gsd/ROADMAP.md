@@ -12,7 +12,7 @@
 ## Phases
 
 ### Phase 1: Foundation
-**Status**: ⬜ Not Started
+**Status**: 🚧 In Progress
 **Objective**: Project scaffolding, config system, and storage layer.
 **Requirements**: REQ-05, REQ-08
 
