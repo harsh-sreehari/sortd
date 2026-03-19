@@ -31,7 +31,7 @@
 **Objective**: Implement `sortd init` to write default config, create dirs, run initial index, and install the systemd service. Implement `daemon stop` and `daemon status` via PID polling.
 
 ### Phase 4: History & Log Improvements
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 **Objective**: Overhaul `sortd log` with colors, tags, and new filters (`--tag`, `--tier`, `--parked`, `--today`). Implement `sortd tags` to view aggregated tag data, and `sortd find <query>` to search the history.
 
 ### Phase 5: NLP Review System
