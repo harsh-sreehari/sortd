@@ -18,6 +18,7 @@ import (
 	"github.com/harsh-sreehari/sortd/internal/graph"
 	"github.com/harsh-sreehari/sortd/internal/llm"
 	"github.com/harsh-sreehari/sortd/internal/mover"
+	"github.com/harsh-sreehari/sortd/internal/peek"
 	"github.com/harsh-sreehari/sortd/internal/pipeline"
 	"github.com/harsh-sreehari/sortd/internal/store"
 	"github.com/harsh-sreehari/sortd/internal/watcher"
@@ -499,6 +500,75 @@ func runIndex() {
 	fmt.Println("Indexing complete.")
 }
 
+var renameCmd = &cobra.Command{
+	Use:   "rename [path]",
+	Short: "Rename a file using AI-suggested context-rich names",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		path := args[0]
+		absPath, _ := filepath.Abs(path)
+		if _, err := os.Stat(absPath); os.IsNotExist(err) {
+			log.Fatalf("File not found: %s", path)
+		}
+
+		_, _, pipe, err := initPipeline()
+		if err != nil {
+			log.Fatalf("Pipeline init failed: %v", err)
+		}
+
+		// 1. Peek content
+		content := peek.PeekDispatcher(absPath, pipe.LLM)
+		
+		fmt.Printf("🧠 Analyzing \033[1m%s\033[0m...\n", filepath.Base(absPath))
+		
+		// 2. Get Suggestion
+		newName, err := pipe.LLM.SuggestRename(filepath.Base(absPath), content)
+		if err != nil {
+			log.Fatalf("LLM failed: %v", err)
+		}
+
+		scanner := bufio.NewScanner(os.Stdin)
+		for {
+			fmt.Printf("💡 Suggestion: \033[36m%s\033[0m\n", newName)
+			fmt.Print("🤔 Apply rename? [Y/n/edit]: ")
+			
+			if !scanner.Scan() {
+				return
+			}
+			input := strings.ToLower(strings.TrimSpace(scanner.Text()))
+
+			if input == "n" {
+				fmt.Println("⏭️  Skipped.")
+				return
+			}
+
+			if input == "edit" {
+				fmt.Print("📝 Enter new name: ")
+				if scanner.Scan() {
+					newName = scanner.Text()
+				}
+			}
+
+			// Validate if file exists
+			destPath := filepath.Join(filepath.Dir(absPath), newName)
+			if _, err := os.Stat(destPath); err == nil && destPath != absPath {
+				fmt.Printf("⚠️  File '%s' already exists! Asking AI for a variation...\n", newName)
+				newName, _ = pipe.LLM.SuggestRename(newName, "The previous suggestion already exists in the folder. Provide a DIFFERENT descriptive name.")
+				continue
+			}
+
+			// 3. Move/Rename
+			finalPath, err := pipe.Mover.Move(absPath, destPath)
+			if err != nil {
+				fmt.Printf("❌ Failed to rename: %v\n", err)
+				return
+			}
+			fmt.Printf("✅ Renamed to: \033[32m%s\033[0m\n", filepath.Base(finalPath))
+			break
+		}
+	},
+}
+
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize sortd configuration and install systemd service",
@@ -553,7 +623,7 @@ func init() {
 	logCmd.Flags().IntVarP(&logLimit, "limit", "n", 20, "Number of logs to show")
 
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd)
-	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd, tagsCmd)
+	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd, tagsCmd, renameCmd)
 }
 
 func main() {
