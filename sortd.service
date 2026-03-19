@@ -1,0 +1,12 @@
+[Unit]
+Description=sortd context-aware file organizer daemon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/go/bin/sortd daemon start
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

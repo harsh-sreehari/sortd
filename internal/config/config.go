@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -67,11 +68,16 @@ func expandHome(path string) string {
 }
 
 func LoadConfig(path string) (*Config, error) {
+	path = expandHome(path)
 	config := DefaultConfig()
 
 	// Parse file
 	_, err := toml.DecodeFile(path, config)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && os.IsNotExist(err) {
+		if err := writeDefaultConfig(path); err != nil {
+			return nil, err
+		}
+	} else if err != nil {
 		return nil, err
 	}
 
@@ -87,4 +93,29 @@ func LoadConfig(path string) (*Config, error) {
 	config.Behaviour.DBPath = expandHome(config.Behaviour.DBPath)
 
 	return config, nil
+}
+
+func writeDefaultConfig(path string) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	home, _ := os.UserHomeDir()
+	
+	defaultCfg := fmt.Sprintf(`[watch]
+folders = ["%s/Downloads"]
+
+[llm]
+host = "http://localhost:1234"
+model = "lmstudio-community/Meta-Llama-3-8B-Instruct-GGUF"
+
+[behaviour]
+confidence_threshold = 0.75
+create_folders = true
+db_path = "%s/.local/share/sortd/sortd.db"
+log_path = "%s/.local/share/sortd/sortd.log"
+`, home, home, home)
+
+	return os.WriteFile(path, []byte(defaultCfg), 0644)
 }
