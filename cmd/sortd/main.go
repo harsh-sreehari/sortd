@@ -24,6 +24,23 @@ import (
 	"github.com/harsh-sreehari/sortd/internal/watcher"
 )
 
+// serviceTemplate is the systemd user service unit embedded directly in the binary.
+// This ensures sortd init works from any install location without needing the
+// sortd.service file present on disk.
+const serviceTemplate = `[Unit]
+Description=sortd context-aware file organizer daemon
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/sortd daemon start
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+`
+
 func getPidPath() string {
 	home, _ := os.UserHomeDir()
 	path := filepath.Join(home, ".local/share/sortd/sortd.pid")
@@ -617,39 +634,33 @@ var initCmd = &cobra.Command{
 		// 2. Perform initial index
 		runIndex()
 
-		// 3. Install systemd service
-		serviceFile := "sortd.service"
-		if _, err := os.Stat(serviceFile); err == nil {
-			dest := filepath.Join(home, ".config/systemd/user/sortd.service")
-			os.MkdirAll(filepath.Dir(dest), 0755)
+		// 3. Install systemd service (content is embedded in the binary at compile time)
+		dest := filepath.Join(home, ".config/systemd/user/sortd.service")
+		os.MkdirAll(filepath.Dir(dest), 0755)
 
-			// Get the current binary path
-			exePath, err := os.Executable()
-			if err != nil {
-				log.Fatalf("Failed to find current binary path: %v", err)
-			}
-
-			// Read and update the service template
-			content, err := os.ReadFile(serviceFile)
-			if err != nil {
-				log.Fatalf("Failed to read service file: %v", err)
-			}
-
-			// Replace the ExecStart line with the actual binary path
-			updatedContent := strings.Replace(string(content), "ExecStart=%h/go/bin/sortd daemon start", "ExecStart="+exePath+" daemon start", 1)
-
-			err = os.WriteFile(dest, []byte(updatedContent), 0644)
-			if err != nil {
-				log.Fatalf("Failed to write updated service file: %v", err)
-			}
-
-			fmt.Printf("✅ Systemd user service installed to %s\n", dest)
-			fmt.Println("\nTo start the daemon, run:")
-			fmt.Println("  systemctl --user daemon-reload")
-			fmt.Println("  systemctl --user enable --now sortd")
-		} else {
-			fmt.Println("⚠️  sortd.service file not found in current directory, skipping service installation.")
+		// Resolve the actual binary path; fall back to the XDG-conventional location.
+		exePath, err := os.Executable()
+		if err != nil || exePath == "" {
+			exePath = filepath.Join(home, ".local/bin/sortd")
 		}
+
+		// Replace the template ExecStart placeholder with the resolved absolute path
+		// so systemd does not need to expand %h at runtime.
+		serviceContent := strings.Replace(
+			serviceTemplate,
+			"ExecStart=%h/.local/bin/sortd daemon start",
+			"ExecStart="+exePath+" daemon start",
+			1,
+		)
+
+		if err := os.WriteFile(dest, []byte(serviceContent), 0644); err != nil {
+			log.Fatalf("Failed to write service file: %v", err)
+		}
+
+		fmt.Printf("✅ Systemd user service installed to %s\n", dest)
+		fmt.Println("\nTo start the daemon, run:")
+		fmt.Println("  systemctl --user daemon-reload")
+		fmt.Println("  systemctl --user enable --now sortd")
 
 		fmt.Println("\nInitialization complete! sortd is ready to go.")
 	},
