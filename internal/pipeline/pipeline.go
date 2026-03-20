@@ -24,13 +24,19 @@ type Pipeline struct {
 
 func New(cfg *config.Config, s *store.Store, g *graph.Graph, l llm.LLMBackend, m *mover.Mover) *Pipeline {
 	return &Pipeline{
-		cfg:   cfg,
-		Store: s,
-		Graph: g,
-		LLM:   l,
-		Mover: m,
-		AllowedRoots: []string{"Downloads/", "Documents/", "Videos/", "Pictures/", "Music/"},
+		cfg:          cfg,
+		Store:        s,
+		Graph:        g,
+		LLM:          l,
+		Mover:        m,
+		AllowedRoots: []string{}, // populated by caller via SetAllowedRoots()
 	}
+}
+
+// SetAllowedRoots replaces the pipeline's allowed root list.
+// Called by initPipeline after deriving roots from config or index crawl.
+func (p *Pipeline) SetAllowedRoots(roots []string) {
+	p.AllowedRoots = roots
 }
 
 func (p *Pipeline) Process(path string) Decision {

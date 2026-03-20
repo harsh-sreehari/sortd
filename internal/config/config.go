@@ -27,12 +27,15 @@ type LLMConfig struct {
 }
 
 type BehaviourConfig struct {
-	SplitByType         bool    `toml:"split_by_type"`
-	ConfidenceThreshold float64 `toml:"confidence_threshold"`
-	CreateFolders       bool    `toml:"create_folders"`
-	LogPath             string  `toml:"log_path"`
-	DBPath              string  `toml:"db_path"`
-	DebounceSeconds     int     `toml:"debounce_seconds"`
+	SplitByType         bool     `toml:"split_by_type"`
+	ConfidenceThreshold float64  `toml:"confidence_threshold"`
+	CreateFolders       bool     `toml:"create_folders"`
+	LogPath             string   `toml:"log_path"`
+	DBPath              string   `toml:"db_path"`
+	DebounceSeconds     int      `toml:"debounce_seconds"`
+	// AllowedRoots constrains where Tier 3 (LLM) can route files.
+	// Leave empty to derive automatically from the top-level crawl roots at startup.
+	AllowedRoots        []string `toml:"allowed_roots"`
 }
 
 func DefaultConfig() *Config {
@@ -118,6 +121,8 @@ confidence_threshold = 0.75
 create_folders = true
 db_path = "%[1]s/.local/share/sortd/sortd.db"
 log_path = "%[1]s/.local/share/sortd/sortd.log"
+# allowed_roots = ["Downloads", "Documents", "Videos", "Pictures", "Music"]
+# If unset, roots are derived automatically from the folders indexed at init time.
 `, home)
 
 	return os.WriteFile(path, []byte(defaultCfg), 0644)

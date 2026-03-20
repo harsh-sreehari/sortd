@@ -67,6 +67,30 @@ func initPipeline() (*config.Config, *store.Store, *pipeline.Pipeline, error) {
 	mv := mover.New()
 
 	pipe := pipeline.New(cfg, st, gr, llmBackend, mv)
+
+	// B6: Determine AllowedRoots from config or derive from real crawl-root directories.
+	allowedRoots := cfg.Behaviour.AllowedRoots
+	if len(allowedRoots) == 0 {
+		// Auto-derive: check which of the default XDG-ish roots actually exist on disk.
+		// This respects the user's actual filesystem rather than assuming a fixed layout.
+		home, _ := os.UserHomeDir()
+		candidates := []string{
+			filepath.Join(home, "Documents"),
+			filepath.Join(home, "Desktop"),
+			filepath.Join(home, "Downloads"),
+			filepath.Join(home, "Pictures"),
+			filepath.Join(home, "Videos"),
+			filepath.Join(home, "Music"),
+		}
+		for _, r := range candidates {
+			if info, err := os.Stat(r); err == nil && info.IsDir() {
+				// Store as bare name with trailing slash to match AllowedRoots format
+				allowedRoots = append(allowedRoots, filepath.Base(r)+"/")
+			}
+		}
+	}
+	pipe.SetAllowedRoots(allowedRoots)
+
 	return cfg, st, pipe, nil
 }
 

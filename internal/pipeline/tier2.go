@@ -26,7 +26,9 @@ func MatchTier2(path string, folders []graph.FolderIndex) (Decision, bool) {
 		}
 	}
 
-	threshold := 0.40 // Lowered from 0.75 for better matching on multi-word paths
+	threshold := 0.75 // Spec-mandated minimum; keeps false-confident matches from
+	                   // bypassing Tier 3. Improve scoring algorithm if recall is low,
+	                   // not the threshold.
 	if bestScore >= threshold {
 		return Decision{
 			Path:        path,
