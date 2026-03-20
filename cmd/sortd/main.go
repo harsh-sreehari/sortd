@@ -464,10 +464,19 @@ var reviewCmd = &cobra.Command{
 				continue
 			}
 
-			// Use Destination if it was successfuly moved/parked, otherwise Filename
+			// Use Destination if it was successfully moved/parked, otherwise Filename
 			srcPath := entry.Filename
 			if entry.Action == "parked" || entry.Action == "moved" {
 				srcPath = entry.Destination
+			}
+
+			// B4: Check the file still exists before attempting the move.
+			// If it was manually moved out of .unsorted/ we mark it corrected
+			// so it stops appearing in future reviews.
+			if _, err := os.Stat(srcPath); os.IsNotExist(err) {
+				fmt.Printf("⚠️  File no longer at %s — may have been moved manually. Marking as resolved.\n", srcPath)
+				st.MarkCorrected(entry.ID, srcPath, "")
+				continue
 			}
 
 			finalPath, err := pipe.Mover.Move(srcPath, dest)

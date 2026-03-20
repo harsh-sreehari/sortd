@@ -39,6 +39,14 @@ func (p *Pipeline) Process(path string) Decision {
 
 	// Tier 1: Rules
 	if decision, match = MatchTier1(path); match {
+		// B9: Resolve Tier 1 destinations to absolute paths at match time.
+		// Tier 1 returns relative paths like "Software/" or "Documents/".
+		// Resolving here ensures the Execution block's AllowedRoots check
+		// (which only guards Tier 3) never mishandles Tier 1 destinations.
+		if !filepath.IsAbs(decision.Destination) {
+			home, _ := os.UserHomeDir()
+			decision.Destination = filepath.Join(home, decision.Destination)
+		}
 		goto Execution
 	}
 

@@ -78,6 +78,13 @@ func (w *Watcher) handleEvent(path string, isWrite bool) {
 		return
 	}
 
+	// B10: Reject directory events early, before entering the debounce map.
+	// Torrent clients and other apps create directories before filling them;
+	// these events should never reach the pipeline.
+	if info, err := os.Stat(path); err == nil && info.IsDir() {
+		return
+	}
+
 	// Abs path
 	absPath, err := filepath.Abs(path)
 	if err != nil {
