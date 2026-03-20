@@ -22,7 +22,6 @@ import (
 	"github.com/harsh-sreehari/sortd/internal/pipeline"
 	"github.com/harsh-sreehari/sortd/internal/store"
 	"github.com/harsh-sreehari/sortd/internal/watcher"
-	"io"
 )
 
 func getPidPath() string {
@@ -624,11 +623,25 @@ var initCmd = &cobra.Command{
 			dest := filepath.Join(home, ".config/systemd/user/sortd.service")
 			os.MkdirAll(filepath.Dir(dest), 0755)
 
-			src, _ := os.Open(serviceFile)
-			defer src.Close()
-			dst, _ := os.Create(dest)
-			defer dst.Close()
-			io.Copy(dst, src)
+			// Get the current binary path
+			exePath, err := os.Executable()
+			if err != nil {
+				log.Fatalf("Failed to find current binary path: %v", err)
+			}
+
+			// Read and update the service template
+			content, err := os.ReadFile(serviceFile)
+			if err != nil {
+				log.Fatalf("Failed to read service file: %v", err)
+			}
+
+			// Replace the ExecStart line with the actual binary path
+			updatedContent := strings.Replace(string(content), "ExecStart=%h/go/bin/sortd daemon start", "ExecStart="+exePath+" daemon start", 1)
+
+			err = os.WriteFile(dest, []byte(updatedContent), 0644)
+			if err != nil {
+				log.Fatalf("Failed to write updated service file: %v", err)
+			}
 
 			fmt.Printf("✅ Systemd user service installed to %s\n", dest)
 			fmt.Println("\nTo start the daemon, run:")
