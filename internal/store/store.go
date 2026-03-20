@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -154,7 +155,7 @@ func (s *Store) SearchLog(n int, filters map[string]string) ([]LogEntry, error) 
 		args = append(args, val)
 	}
 	if val, ok := filters["today"]; ok && val == "true" {
-		where += " AND timestamp LIKE (date('now') || '%')"
+		where += " AND DATE(timestamp) = DATE('now')"
 	}
 	if val, ok := filters["query"]; ok && val != "" {
 		where += " AND (original_filename LIKE ? OR destination LIKE ? OR reasoning LIKE ?)"
@@ -323,8 +324,19 @@ func (s *Store) AggregatedTags() ([]TagStat, error) {
 			continue
 		}
 		var tags []string
-		if err := json.Unmarshal([]byte(tagsJSON), &tags); err == nil {
-			for _, t := range tags {
+		if err := json.Unmarshal([]byte(tagsJSON), &tags); err != nil {
+			// Legacy fallback: entries written before JSON encoding may be
+			// comma-separated plain strings (e.g. "academic,pdf,report").
+			// Split and trim rather than silently discarding the entry.
+			for _, t := range strings.Split(tagsJSON, ",") {
+				t = strings.TrimSpace(t)
+				if t != "" {
+					tags = append(tags, t)
+				}
+			}
+		}
+		for _, t := range tags {
+			if t != "" {
 				counts[t]++
 			}
 		}
