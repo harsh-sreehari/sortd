@@ -677,15 +677,24 @@ var undoCmd = &cobra.Command{
 	},
 }
 
+var renameBatch bool
+
 var renameCmd = &cobra.Command{
 	Use:   "rename [path]",
-	Short: "Rename a file using AI-suggested context-rich names",
+	Short: "Rename a file (or recursively rename a batch of files) using AI-suggested context-rich names",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		path := args[0]
 		absPath, _ := filepath.Abs(path)
-		if _, err := os.Stat(absPath); os.IsNotExist(err) {
-			log.Fatalf("File not found: %s", path)
+		info, err := os.Stat(absPath)
+		if os.IsNotExist(err) {
+			log.Fatalf("Path not found: %s", path)
+		}
+
+		if renameBatch && !info.IsDir() {
+			log.Fatalf("--batch requires a directory path")
+		} else if !renameBatch && info.IsDir() {
+			log.Fatalf("Path %s is a directory. Use --batch to rename files inside it.", absPath)
 		}
 
 		_, _, pipe, err := initPipeline()
@@ -693,55 +702,118 @@ var renameCmd = &cobra.Command{
 			log.Fatalf("Pipeline init failed: %v", err)
 		}
 
-		// 1. Peek content
-		content := peek.PeekDispatcher(absPath, pipe.LLM)
-		
-		fmt.Printf("🧠 Analyzing \033[1m%s\033[0m...\n", filepath.Base(absPath))
-		
-		// 2. Get Suggestion
-		newName, err := pipe.LLM.SuggestRename(filepath.Base(absPath), content)
-		if err != nil {
-			log.Fatalf("LLM failed: %v", err)
-		}
-
-		scanner := bufio.NewScanner(os.Stdin)
-		for {
-			fmt.Printf("💡 Suggestion: \033[36m%s\033[0m\n", newName)
-			fmt.Print("🤔 Apply rename? [Y/n/edit]: ")
-			
-			if !scanner.Scan() {
-				return
+		// Build list of target files
+		var targets []string
+		if renameBatch {
+			entries, err := os.ReadDir(absPath)
+			if err != nil {
+				log.Fatalf("Failed to read directory: %v", err)
 			}
-			input := strings.ToLower(strings.TrimSpace(scanner.Text()))
-
-			if input == "n" {
-				fmt.Println("⏭️  Skipped.")
-				return
-			}
-
-			if input == "edit" {
-				fmt.Print("📝 Enter new name: ")
-				if scanner.Scan() {
-					newName = scanner.Text()
+			for _, e := range entries {
+				if !e.IsDir() {
+					targets = append(targets, filepath.Join(absPath, e.Name()))
 				}
 			}
+			if len(targets) == 0 {
+				fmt.Println("No files found in directory to rename.")
+				return
+			}
+			fmt.Printf("📦 Found %d files for batch rename.\n\n", len(targets))
+		} else {
+			targets = append(targets, absPath)
+		}
 
-			// Validate if file exists
-			destPath := filepath.Join(filepath.Dir(absPath), newName)
-			if _, err := os.Stat(destPath); err == nil && destPath != absPath {
-				fmt.Printf("⚠️  File '%s' already exists! Asking AI for a variation...\n", newName)
-				newName, _ = pipe.LLM.SuggestRename(newName, "The previous suggestion already exists in the folder. Provide a DIFFERENT descriptive name.")
+		type proposal struct {
+			src  string
+			dest string
+		}
+		var proposals []proposal
+		scanner := bufio.NewScanner(os.Stdin)
+
+		for _, fileTarget := range targets {
+			content := peek.PeekDispatcher(fileTarget, pipe.LLM)
+			fmt.Printf("🧠 Analyzing \033[1m%s\033[0m...\n", filepath.Base(fileTarget))
+			
+			newName, err := pipe.LLM.SuggestRename(filepath.Base(fileTarget), content)
+			if err != nil {
+				fmt.Printf("❌ LLM failed for %s: %v\n", filepath.Base(fileTarget), err)
 				continue
 			}
 
-			// 3. Move/Rename
-			finalPath, err := pipe.Mover.Move(absPath, destPath)
-			if err != nil {
-				fmt.Printf("❌ Failed to rename: %v\n", err)
-				return
+			if renameBatch {
+				fmt.Printf("💡 Suggestion: \033[36m%s\033[0m\n", newName)
+				fmt.Println(strings.Repeat("-", 40))
+				
+				// Keep track of proposals to apply later in batch
+				destPath := filepath.Join(filepath.Dir(fileTarget), newName)
+				proposals = append(proposals, proposal{src: fileTarget, dest: destPath})
+			} else {
+				// Interactive mode for a single file
+				for {
+					fmt.Printf("💡 Suggestion: \033[36m%s\033[0m\n", newName)
+					fmt.Print("🤔 Apply rename? [Y/n/edit]: ")
+					
+					if !scanner.Scan() {
+						return
+					}
+					input := strings.ToLower(strings.TrimSpace(scanner.Text()))
+
+					if input == "n" {
+						fmt.Println("⏭️  Skipped.")
+						return
+					}
+
+					if input == "edit" {
+						fmt.Print("📝 Enter new name: ")
+						if scanner.Scan() {
+							newName = scanner.Text()
+						}
+					}
+
+					destPath := filepath.Join(filepath.Dir(fileTarget), newName)
+					if _, err := os.Stat(destPath); err == nil && destPath != fileTarget {
+						fmt.Printf("⚠️  File '%s' already exists! Asking AI for a variation...\n", newName)
+						newName, _ = pipe.LLM.SuggestRename(newName, "The previous suggestion already exists in the folder. Provide a DIFFERENT descriptive name.")
+						continue
+					}
+
+					finalPath, err := pipe.Mover.Move(fileTarget, destPath)
+					if err != nil {
+						fmt.Printf("❌ Failed to rename: %v\n", err)
+						return
+					}
+					fmt.Printf("✅ Renamed to: \033[32m%s\033[0m\n", filepath.Base(finalPath))
+					break
+				}
 			}
-			fmt.Printf("✅ Renamed to: \033[32m%s\033[0m\n", filepath.Base(finalPath))
-			break
+		}
+
+		if renameBatch && len(proposals) > 0 {
+			fmt.Printf("\n🚀 Apply %d renames? [y/N]: ", len(proposals))
+			if scanner.Scan() {
+				input := strings.ToLower(strings.TrimSpace(scanner.Text()))
+				if input == "y" || input == "yes" {
+					successCount := 0
+					for _, p := range proposals {
+						// Simple existence check avoiding exact overwrites during batch
+						if _, err := os.Stat(p.dest); err == nil && p.dest != p.src {
+							fmt.Printf("⚠️  Skipping %s (destination already exists)\n", filepath.Base(p.src))
+							continue
+						}
+						
+						finalPath, err := pipe.Mover.Move(p.src, p.dest)
+						if err != nil {
+							fmt.Printf("❌ Failed to rename %s: %v\n", filepath.Base(p.src), err)
+							continue
+						}
+						fmt.Printf("✅ Renamed: \033[32m%s\033[0m\n", filepath.Base(finalPath))
+						successCount++
+					}
+					fmt.Printf("\nDone! Successfully renamed %d file(s).\n", successCount)
+				} else {
+					fmt.Println("⏭️  Batch rename aborted.")
+				}
+			}
 		}
 	},
 }
@@ -839,6 +911,7 @@ func init() {
 	findCmd.Flags().StringVar(&findTag, "tag", "", "Filter results by specific tag")
 	findCmd.Flags().StringVar(&findSince, "since", "", "Filter results since a duration (e.g. 24h, 7d)")
 	tagsCmd.Flags().StringVar(&tagsFolder, "folder", "", "Show tags only for this destination folder")
+	renameCmd.Flags().BoolVar(&renameBatch, "batch", false, "Rename all files in the given directory")
 
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd)
 	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd, tagsCmd, renameCmd, pruneCmd, undoCmd)
