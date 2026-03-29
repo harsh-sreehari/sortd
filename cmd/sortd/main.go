@@ -94,9 +94,12 @@ func initPipeline() (*config.Config, *store.Store, *pipeline.Pipeline, error) {
 	return cfg, st, pipe, nil
 }
 
+var version = "dev"
+
 var rootCmd = &cobra.Command{
-	Use:   "sortd",
-	Short: "sortd is a context-aware file organiser daemon",
+	Use:     "sortd",
+	Short:   "sortd is a context-aware file organiser daemon",
+	Version: version,
 }
 
 var daemonCmd = &cobra.Command{
