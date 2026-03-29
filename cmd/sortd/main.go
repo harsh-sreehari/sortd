@@ -380,6 +380,11 @@ var logCmd = &cobra.Command{
 	},
 }
 
+var (
+	findTag   string
+	findSince string
+)
+
 var findCmd = &cobra.Command{
 	Use:   "find <query>",
 	Short: "Search sort history for a specific file or destination",
@@ -392,6 +397,12 @@ var findCmd = &cobra.Command{
 		defer st.Close()
 
 		filters := map[string]string{"query": args[0]}
+		if findTag != "" {
+			filters["tag"] = findTag
+		}
+		if findSince != "" {
+			filters["since"] = findSince
+		}
 		logs, err := st.SearchLog(50, filters)
 		if err != nil {
 			log.Fatalf("Search failed: %v", err)
@@ -415,6 +426,8 @@ var findCmd = &cobra.Command{
 	},
 }
 
+var tagsFolder string
+
 var tagsCmd = &cobra.Command{
 	Use:   "tags",
 	Short: "Show frequency of tags found in your files",
@@ -425,7 +438,7 @@ var tagsCmd = &cobra.Command{
 		}
 		defer st.Close()
 
-		stats, err := st.AggregatedTags()
+		stats, err := st.AggregatedTags(tagsFolder)
 		if err != nil {
 			log.Fatalf("Failed to aggregate tags: %v", err)
 		}
@@ -435,7 +448,11 @@ var tagsCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Println("\n🏷️  Tag Analytics (Global)")
+		if tagsFolder != "" {
+			fmt.Printf("\n🏷️  Tag Analytics for %s\n", tagsFolder)
+		} else {
+			fmt.Println("\n🏷️  Tag Analytics (Global)")
+		}
 		fmt.Println(strings.Repeat("-", 30))
 		for _, s := range stats {
 			// Basic text bar representation
@@ -748,6 +765,10 @@ func init() {
 	logCmd.Flags().StringVar(&logTag, "tag", "", "Filter by tag")
 	logCmd.Flags().IntVarP(&logLimit, "limit", "n", 20, "Number of logs to show")
 	logCmd.Flags().BoolVar(&logVerbose, "verbose", false, "Show detailed reasoning from LLM")
+
+	findCmd.Flags().StringVar(&findTag, "tag", "", "Filter results by specific tag")
+	findCmd.Flags().StringVar(&findSince, "since", "", "Filter results since a duration (e.g. 24h, 7d)")
+	tagsCmd.Flags().StringVar(&tagsFolder, "folder", "", "Show tags only for this destination folder")
 
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd)
 	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd, tagsCmd, renameCmd, pruneCmd)

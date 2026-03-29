@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -156,6 +157,13 @@ func (s *Store) SearchLog(n int, filters map[string]string) ([]LogEntry, error) 
 	}
 	if val, ok := filters["today"]; ok && val == "true" {
 		where += " AND DATE(timestamp) = DATE('now')"
+	}
+	if val, ok := filters["since"]; ok && val != "" {
+		if dur, err := time.ParseDuration(val); err == nil {
+			cutoff := time.Now().Add(-dur).Format("2006-01-02 15:04:05")
+			where += " AND timestamp >= ?"
+			args = append(args, cutoff)
+		}
 	}
 	if val, ok := filters["query"]; ok && val != "" {
 		where += " AND (original_filename LIKE ? OR destination LIKE ? OR reasoning LIKE ?)"
@@ -309,9 +317,14 @@ func (s *Store) Prune(roots []string) (int, int, error) {
 	return prunedIndex, prunedLog, nil
 }
 
-func (s *Store) AggregatedTags() ([]TagStat, error) {
+func (s *Store) AggregatedTags(folder string) ([]TagStat, error) {
 	query := "SELECT tags FROM sort_log WHERE tags IS NOT NULL AND tags != '[]'"
-	rows, err := s.db.Query(query)
+	var args []interface{}
+	if folder != "" {
+		query += " AND destination LIKE ?"
+		args = append(args, folder+"%")
+	}
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
