@@ -257,6 +257,7 @@ var (
 	logToday  bool
 	logTag    string
 	logLimit  int
+	logVerbose bool
 )
 
 var logCmd = &cobra.Command{
@@ -304,40 +305,77 @@ var logCmd = &cobra.Command{
 		cyan := "\033[36m"
 		gray := "\033[90m"
 
-		fmt.Printf("%s%-20s | %-10s | %-40s | %-8s | %s%s\n", bold, "Timestamp", "Action", "Filename", "Tier", "Destination", reset)
-		fmt.Println(strings.Repeat("-", 120))
-		for _, l := range logs {
-			base := l.OriginalFilename
-			if base == "" {
-				base = filepath.Base(l.Filename)
-			}
-			if len(base) > 38 {
-				base = base[:35] + "..."
-			}
+		if logVerbose {
+			fmt.Printf("Displaying %d detailed logs:\n\n", len(logs))
+			for _, l := range logs {
+				base := l.OriginalFilename
+				if base == "" {
+					base = filepath.Base(l.Filename)
+				}
 
-			// Format tags
-			tagsStr := ""
-			var tags []string
-			if err := json.Unmarshal([]byte(l.Tags), &tags); err == nil && len(tags) > 0 {
-				tagsStr = fmt.Sprintf(" %s[%s]%s", gray, strings.Join(tags, ","), reset)
-			}
+				tagsStr := ""
+				var tags []string
+				if err := json.Unmarshal([]byte(l.Tags), &tags); err == nil && len(tags) > 0 {
+					tagsStr = strings.Join(tags, ", ")
+				}
 
-			color := reset
-			switch l.Action {
-			case "moved":
-				color = green
-			case "parked":
-				color = yellow
-			case "skipped":
-				color = gray
-			}
+				color := reset
+				switch l.Action {
+				case "moved":
+					color = green
+				case "parked":
+					color = yellow
+				case "skipped":
+					color = gray
+				}
 
-			fmt.Printf("%s%-20s%s | %s%-10s%s | %-40s | %sTier %-2d%s | %s%s\n",
-				gray, l.Timestamp, reset,
-				color, l.Action, reset,
-				base+tagsStr,
-				cyan, l.Tier, reset,
-				l.Destination, reset)
+				fmt.Printf("%s%s%s %s%s%s -> %s\n", gray, l.Timestamp[:16], reset, color, l.Action, reset, l.Destination)
+				fmt.Printf("      File  : %s\n", base)
+				if tagsStr != "" {
+					fmt.Printf("      Tags  : %s[%s]%s\n", gray, tagsStr, reset)
+				}
+				fmt.Printf("      Tier  : %d\n", l.Tier)
+				if l.Reasoning != "" {
+					fmt.Printf("      Reason: %s%s%s\n", cyan, l.Reasoning, reset)
+				}
+				fmt.Println()
+			}
+		} else {
+			fmt.Printf("%s%-20s | %-10s | %-40s | %-8s | %s%s\n", bold, "Timestamp", "Action", "Filename", "Tier", "Destination", reset)
+			fmt.Println(strings.Repeat("-", 120))
+			for _, l := range logs {
+				base := l.OriginalFilename
+				if base == "" {
+					base = filepath.Base(l.Filename)
+				}
+				if len(base) > 38 {
+					base = base[:35] + "..."
+				}
+
+				// Format tags
+				tagsStr := ""
+				var tags []string
+				if err := json.Unmarshal([]byte(l.Tags), &tags); err == nil && len(tags) > 0 {
+					tagsStr = fmt.Sprintf(" %s[%s]%s", gray, strings.Join(tags, ","), reset)
+				}
+
+				color := reset
+				switch l.Action {
+				case "moved":
+					color = green
+				case "parked":
+					color = yellow
+				case "skipped":
+					color = gray
+				}
+
+				fmt.Printf("%s%-20s%s | %s%-10s%s | %-40s | %sTier %-2d%s | %s%s\n",
+					gray, l.Timestamp, reset,
+					color, l.Action, reset,
+					base+tagsStr,
+					cyan, l.Tier, reset,
+					l.Destination, reset)
+			}
 		}
 	},
 }
@@ -709,6 +747,7 @@ func init() {
 	logCmd.Flags().BoolVar(&logToday, "today", false, "Show only today's logs")
 	logCmd.Flags().StringVar(&logTag, "tag", "", "Filter by tag")
 	logCmd.Flags().IntVarP(&logLimit, "limit", "n", 20, "Number of logs to show")
+	logCmd.Flags().BoolVar(&logVerbose, "verbose", false, "Show detailed reasoning from LLM")
 
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd)
 	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd, tagsCmd, renameCmd, pruneCmd)
