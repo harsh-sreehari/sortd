@@ -139,6 +139,35 @@ func (s *Store) UnsortedFiles() ([]LogEntry, error) {
 	return entries, nil
 }
 
+// GetUndoableMoves returns the last N entries that were either moved or parked.
+func (s *Store) GetUndoableMoves(n int) ([]LogEntry, error) {
+	query := `SELECT id, timestamp, filename, original_filename, source, destination, tier, confidence, tags, action, reasoning, corrected 
+			  FROM sort_log WHERE action IN ('moved', 'parked') ORDER BY timestamp DESC, id DESC LIMIT ?`
+	rows, err := s.db.Query(query, n)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []LogEntry
+	for rows.Next() {
+		var e LogEntry
+		var origName, reason sql.NullString
+		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Filename, &origName, &e.Source, &e.Destination, &e.Tier, &e.Confidence, &e.Tags, &e.Action, &reason, &e.Corrected); err != nil {
+			return nil, err
+		}
+		e.OriginalFilename = origName.String
+		e.Reasoning = reason.String
+		entries = append(entries, e)
+	}
+	return entries, nil
+}
+
+func (s *Store) DeleteLogEntry(id int) error {
+	_, err := s.db.Exec("DELETE FROM sort_log WHERE id = ?", id)
+	return err
+}
+
 func (s *Store) SearchLog(n int, filters map[string]string) ([]LogEntry, error) {
 	where := "WHERE 1=1"
 	var args []interface{}

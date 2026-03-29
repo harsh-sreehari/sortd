@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -607,6 +608,75 @@ func runIndex() {
 	fmt.Println("Indexing complete.")
 }
 
+var undoCmd = &cobra.Command{
+	Use:   "undo [n]",
+	Short: "Undo the last n file moves (default 1)",
+	Args:  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		n := 1
+		if len(args) > 0 {
+			var err error
+			n, err = strconv.Atoi(args[0])
+			if err != nil || n < 1 {
+				log.Fatalf("Invalid number of moves: %v", args[0])
+			}
+		}
+
+		_, st, pipe, err := initPipeline()
+		if err != nil {
+			log.Fatalf("Init failed: %v", err)
+		}
+		defer st.Close()
+
+		moves, err := st.GetUndoableMoves(n)
+		if err != nil {
+			log.Fatalf("Failed to fetch recent moves: %v", err)
+		}
+
+		if len(moves) == 0 {
+			fmt.Println("No recent moves to undo.")
+			return
+		}
+
+		fmt.Printf("⏪ Undoing last %d move(s)...\n", len(moves))
+		
+		successCount := 0
+		for _, m := range moves {
+			if _, err := os.Stat(m.Destination); os.IsNotExist(err) {
+				fmt.Printf("⚠️  Skipping %s (file no longer at destination)\n", filepath.Base(m.Destination))
+				continue
+			}
+
+			// Reverse the move: destination back to source dir
+			srcDir := filepath.Dir(m.Source)
+			
+			// If source directory doesn't exist anymore, create it
+			os.MkdirAll(srcDir, 0755)
+
+			finalPath, err := pipe.Mover.Move(m.Destination, srcDir)
+			if err != nil {
+				fmt.Printf("❌ Failed to move %s back: %v\n", filepath.Base(m.Destination), err)
+				continue
+			}
+
+			// If the original name differs, try to rename it back
+			if m.OriginalFilename != "" && filepath.Base(finalPath) != m.OriginalFilename {
+				origPath := filepath.Join(srcDir, m.OriginalFilename)
+				if _, err := os.Stat(origPath); os.IsNotExist(err) {
+					os.Rename(finalPath, origPath)
+					finalPath = origPath
+				}
+			}
+
+			// Delete from log
+			st.DeleteLogEntry(m.ID)
+			fmt.Printf("✅ Restored %s to %s\n", filepath.Base(m.Destination), srcDir)
+			successCount++
+		}
+		fmt.Printf("\nDone! Successfully undid %d file(s).\n", successCount)
+	},
+}
+
 var renameCmd = &cobra.Command{
 	Use:   "rename [path]",
 	Short: "Rename a file using AI-suggested context-rich names",
@@ -771,7 +841,7 @@ func init() {
 	tagsCmd.Flags().StringVar(&tagsFolder, "folder", "", "Show tags only for this destination folder")
 
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd)
-	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd, tagsCmd, renameCmd, pruneCmd)
+	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd, tagsCmd, renameCmd, pruneCmd, undoCmd)
 }
 
 func main() {
