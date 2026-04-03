@@ -406,3 +406,40 @@ func (s *Store) Close() error {
 	}
 	return nil
 }
+
+type GlobalStatus struct {
+	TotalMoved     int
+	TotalParked    int
+	TotalCorrected int
+	TotalFolders   int
+}
+
+func (s *Store) GetStatusMetrics() (GlobalStatus, error) {
+	var gs GlobalStatus
+
+	// Total Moved
+	err := s.db.QueryRow("SELECT COUNT(*) FROM sort_log WHERE action = 'moved'").Scan(&gs.TotalMoved)
+	if err != nil {
+		return gs, err
+	}
+
+	// Total Parked
+	err = s.db.QueryRow("SELECT COUNT(*) FROM sort_log WHERE action = 'parked'").Scan(&gs.TotalParked)
+	if err != nil {
+		return gs, err
+	}
+
+	// Total Corrected
+	err = s.db.QueryRow("SELECT COUNT(*) FROM sort_log WHERE corrected = 1").Scan(&gs.TotalCorrected)
+	if err != nil {
+		return gs, err
+	}
+
+	// Total Folders Indexed
+	err = s.db.QueryRow("SELECT COUNT(*) FROM folder_index").Scan(&gs.TotalFolders)
+	if err != nil {
+		return gs, err
+	}
+
+	return gs, nil
+}

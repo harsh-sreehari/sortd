@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -846,6 +848,63 @@ var pruneCmd = &cobra.Command{
 	},
 }
 
+var statusCmd = &cobra.Command{
+	Use:   "status",
+	Short: "Show sortd daemon health and metrics",
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg, st, _, err := initPipeline()
+		if err != nil {
+			log.Fatalf("Init failed: %v", err)
+		}
+		defer st.Close()
+
+		fmt.Println("\n📊 sortd System Status")
+		fmt.Println(strings.Repeat("━", 40))
+
+		// 1. Daemon Status
+		daemonStatus := "\033[31mOffline\033[0m"
+		pidPath := getPidPath()
+		if _, err := os.Stat(pidPath); err == nil {
+			if b, err := os.ReadFile(pidPath); err == nil {
+				pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
+				if err == nil {
+					process, err := os.FindProcess(pid)
+					if err == nil {
+						// On Unix, FindProcess always succeeds. Need to signal 0 to check existence.
+						if err := process.Signal(syscall.Signal(0)); err == nil {
+							daemonStatus = "\033[32mActive (PID " + strconv.Itoa(pid) + ")\033[0m"
+						}
+					}
+				}
+			}
+		}
+		fmt.Printf("%-20s: %s\n", "Daemon State", daemonStatus)
+
+		// 2. LLM Health
+		llmStatus := "\033[31mUnreachable\033[0m"
+		client := &http.Client{Timeout: 2 * time.Second}
+		resp, err := client.Get(cfg.LLM.Host + "/v1/models")
+		if err == nil {
+			llmStatus = "\033[32mOnline\033[0m (" + cfg.LLM.Model + ")"
+			resp.Body.Close()
+		}
+		fmt.Printf("%-20s: %s\n", "LLM Backend", llmStatus)
+
+		// 3. Metrics
+		stats, err := st.GetStatusMetrics()
+		if err == nil {
+			fmt.Println("\n📈 Lifetime Metrics")
+			fmt.Println(strings.Repeat("-", 40))
+			fmt.Printf("%-20s: %d\n", "Files Moved", stats.TotalMoved)
+			fmt.Printf("%-20s: %d\n", "Files Parked", stats.TotalParked)
+			fmt.Printf("%-20s: %d\n", "User Corrections", stats.TotalCorrected)
+			fmt.Printf("%-20s: %d\n", "Folders Indexed", stats.TotalFolders)
+		}
+
+		fmt.Println()
+	},
+}
+
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize sortd configuration and install systemd service",
@@ -914,7 +973,7 @@ func init() {
 	renameCmd.Flags().BoolVar(&renameBatch, "batch", false, "Rename all files in the given directory")
 
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd)
-	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd, tagsCmd, renameCmd, pruneCmd, undoCmd)
+	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd, tagsCmd, renameCmd, pruneCmd, undoCmd, statusCmd)
 }
 
 func main() {
