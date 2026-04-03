@@ -370,12 +370,12 @@ var logCmd = &cobra.Command{
 					color = gray
 				}
 
-				fmt.Printf("%s%-20s%s | %s%-10s%s | %-40s | %sTier %-2d%s | %s%s\n",
+				fmt.Printf("%s%-20.20s%s | %s%-10.10s%s | %-40.40s | %sTier %-1d%-3s%s | %.80s\n",
 					gray, l.Timestamp, reset,
 					color, l.Action, reset,
 					base+tagsStr,
-					cyan, l.Tier, reset,
-					l.Destination, reset)
+					cyan, l.Tier, "", reset,
+					l.Destination)
 			}
 		}
 	},

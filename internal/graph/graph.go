@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -66,6 +67,8 @@ func (g *Graph) Crawl(roots []string, ignore []string) error {
 		log.Printf("Failed to clear index: %v", err)
 	}
 
+	folderCount := 0
+
 	for _, root := range roots {
 		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -106,6 +109,9 @@ func (g *Graph) Crawl(roots []string, ignore []string) error {
 			_, err = g.Store.DB().Exec("INSERT OR REPLACE INTO folder_index (path, keywords, depth, parent) VALUES (?, ?, ?, ?)", path, keywords, depth, parent)
 			if err != nil {
 				log.Printf("Failed to index folder %s: %v", path, err)
+			} else {
+				folderCount++
+				fmt.Printf("\rIndexing... found %d folders", folderCount)
 			}
 			return nil
 		})
@@ -114,6 +120,7 @@ func (g *Graph) Crawl(roots []string, ignore []string) error {
 			return err
 		}
 	}
+	fmt.Println() // Newline after progress
 	return nil
 }
 
