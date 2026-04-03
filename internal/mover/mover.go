@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"golang.org/x/sys/unix"
 )
 
 type Mover struct{}
@@ -100,4 +102,18 @@ func (m *Mover) copyDelete(src, dest string) (string, error) {
 func (m *Mover) Park(src, rootFolder string) (string, error) {
 	dest := filepath.Join(rootFolder, ".unsorted", filepath.Base(src))
 	return m.Move(src, dest)
+}
+
+func (m *Mover) WriteXattr(path string, tags []string) {
+	if len(tags) == 0 {
+		return
+	}
+
+	val := strings.Join(tags, ",")
+	// user. namespace is required for user-defined attributes on Linux
+	err := unix.Setxattr(path, "user.sortd.tags", []byte(val), 0)
+	if err != nil {
+		// Log and continue; xattr support is optional and shouldn't break the flow
+		fmt.Printf("⚠️  Failed to write xattr to %s: %v\n", path, err)
+	}
 }

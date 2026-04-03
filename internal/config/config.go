@@ -36,6 +36,8 @@ type BehaviourConfig struct {
 	// AllowedRoots constrains where Tier 3 (LLM) can route files.
 	// Leave empty to derive automatically from the top-level crawl roots at startup.
 	AllowedRoots        []string `toml:"allowed_roots"`
+	Notifications       bool     `toml:"notifications"`
+	Xattr              bool     `toml:"xattr"`
 }
 
 func DefaultConfig() *Config {
@@ -107,22 +109,50 @@ func writeDefaultConfig(path string) error {
 	home, _ := os.UserHomeDir()
 	
 	defaultCfg := fmt.Sprintf(`[watch]
-# Directives to monitor
+# List of absolute paths to monitor for new file events.
+# sortd will automatically ignore hidden files (starting with .) and the .unsorted/ folder.
 folders = ["%[1]s/Downloads"]
 
+# Paths to ignore within watched folders. Supports glob patterns.
+ignore = []
+
 [llm]
-# Your local LLM endpoint (LM Studio/Ollama)
+# Your local LLM endpoint (LM Studio or OpenAI-compatible backend).
 host = "http://localhost:1234"
+
+# The specific model ID to use for inference.
 model = "qwen3-VL-4b"
 
+# Backend type: "lmstudio" (default) or "openai".
+backend = "lmstudio"
+
 [behaviour]
-# Minimum confidence (0.0-1.0) before a move is performed
+# Minimum confidence (0.0-1.0) before the LLM (Tier 3) is allowed to move a file.
+# Higher values (0.8+) reduce misclassifications but increase "parked" files.
 confidence_threshold = 0.75
+
+# If true, sortd will create the destination folder if it doesn't already exist.
 create_folders = true
+
+# Path to the SQLite database where sortd logs decisions and user preferences.
 db_path = "%[1]s/.local/share/sortd/sortd.db"
+
+# Path to the human-readable log file.
 log_path = "%[1]s/.local/share/sortd/sortd.log"
-# allowed_roots = ["Downloads", "Documents", "Videos", "Pictures", "Music"]
-# If unset, roots are derived automatically from the folders indexed at init time.
+
+# Seconds to wait after a file event before processing (prevents partial move issues).
+debounce_seconds = 2
+
+# List of top-level folders the LLM is restricted to sorting files into.
+# If unset, sortd automatically derives these from your filesystem (Documents, Pictures, etc.).
+# allowed_roots = ["Documents", "Pictures", "Videos", "Music"]
+
+# Enable desktop notifications via notify-send for successful sorting actions.
+notifications = false
+
+# If true, write sort tags to the file's extended attributes (user.sortd.tags).
+# Requires a filesystem that supports xattrs (ext4, xfs, btrfs).
+xattr = false
 `, home)
 
 	return os.WriteFile(path, []byte(defaultCfg), 0644)

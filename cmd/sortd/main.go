@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strconv"
@@ -69,7 +70,7 @@ func initPipeline() (*config.Config, *store.Store, *pipeline.Pipeline, error) {
 	}
 	mv := mover.New()
 
-	pipe := pipeline.New(cfg, st, gr, llmBackend, mv)
+	pipe := pipeline.New(cfg, st, gr, llmBackend, mv, sendNotification)
 
 	// B6: Determine AllowedRoots from config or derive from real crawl-root directories.
 	allowedRoots := cfg.Behaviour.AllowedRoots
@@ -95,6 +96,13 @@ func initPipeline() (*config.Config, *store.Store, *pipeline.Pipeline, error) {
 	pipe.SetAllowedRoots(allowedRoots)
 
 	return cfg, st, pipe, nil
+}
+
+func sendNotification(title, message string) {
+	// Q11: Optional notify-send integration
+	fmt.Printf("🔔 [Notify]: %s - %s\n", title, message)
+	// We use exec.Command to avoid needing a CGO dependency or specific library
+	exec.Command("notify-send", "-a", "sortd", "-i", "folder", title, message).Run()
 }
 
 var version = "dev"
@@ -140,6 +148,17 @@ var daemonStartCmd = &cobra.Command{
 		w, err := watcher.New(cfg)
 		if err != nil {
 			log.Fatalf("Watcher failed: %v", err)
+		}
+
+		// Q9: Perform LM Studio health check on startup
+		fmt.Printf("🔍 Checking LLM Backend (%s)... ", cfg.LLM.Host)
+		client := &http.Client{Timeout: 2 * time.Second}
+		resp, err := client.Get(cfg.LLM.Host + "/v1/models")
+		if err != nil {
+			fmt.Println("\n⚠️  LLM Backend unreachable. Tier 3 sorting will be disabled until backend is online.")
+		} else {
+			fmt.Println("\033[32mOnline\033[0m")
+			resp.Body.Close()
 		}
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -820,6 +839,11 @@ var renameCmd = &cobra.Command{
 	},
 }
 
+var (
+	pruneDryRun bool
+	pruneConfirm bool
+)
+
 var pruneCmd = &cobra.Command{
 	Use:   "prune",
 	Short: "Remove stale records for files that no longer exist",
@@ -837,8 +861,28 @@ var pruneCmd = &cobra.Command{
 		}
 		defer st.Close()
 
+		if !pruneConfirm && pruneDryRun {
+			fmt.Println("🔍 [DRY RUN] Scanning for stale records (no changes will be applied)...")
+			// We need a way to see what WOULD be pruned. 
+			// Let's assume store.Prune can take a dryRun boolean or we implement a Preview method.
+			// For now, we'll just report what the current Prune would do if we didn't commit,
+			// but since Prune handles it internally, we'll add a DryRun parameter to it.
+			prunedIndex, prunedLog, err := st.Prune(cfg.Watch.Folders, true)
+			if err != nil {
+				log.Fatalf("Dry run failed: %v", err)
+			}
+			fmt.Printf("\n💡 Would prune %d folder index entries and %d log entries.\n", prunedIndex, prunedLog)
+			fmt.Println("▶ Use 'sortd prune --confirm' to apply these changes.")
+			return
+		}
+
+		if !pruneConfirm {
+			fmt.Println("⚠️  Cleanup requires explicit confirmation. Use --confirm or rely on default dry-run.")
+			return
+		}
+
 		fmt.Println("🧹 Pruning stale records...")
-		prunedIndex, prunedLog, err := st.Prune(cfg.Watch.Folders)
+		prunedIndex, prunedLog, err := st.Prune(cfg.Watch.Folders, false)
 		if err != nil {
 			log.Fatalf("Prune failed: %v", err)
 		}
@@ -971,6 +1015,8 @@ func init() {
 	findCmd.Flags().StringVar(&findSince, "since", "", "Filter results since a duration (e.g. 24h, 7d)")
 	tagsCmd.Flags().StringVar(&tagsFolder, "folder", "", "Show tags only for this destination folder")
 	renameCmd.Flags().BoolVar(&renameBatch, "batch", false, "Rename all files in the given directory")
+	pruneCmd.Flags().BoolVar(&pruneDryRun, "dry-run", true, "Show what would be pruned without applying changes")
+	pruneCmd.Flags().BoolVar(&pruneConfirm, "confirm", false, "Actually apply the pruning changes")
 
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd)
 	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd, tagsCmd, renameCmd, pruneCmd, undoCmd, statusCmd)

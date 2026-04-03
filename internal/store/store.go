@@ -292,7 +292,7 @@ func (s *Store) GetAffinities(tags []string) (map[string]float64, error) {
 	return affinities, nil
 }
 
-func (s *Store) Prune(roots []string) (int, int, error) {
+func (s *Store) Prune(roots []string, dryRun bool) (int, int, error) {
 	// 0. Safety check: ensure at least one root is reachable to avoid wiping on empty disk
 	reachable := false
 	for _, r := range roots {
@@ -321,7 +321,9 @@ func (s *Store) Prune(roots []string) (int, int, error) {
 	rows.Close()
 
 	for _, p := range toDeleteIndex {
-		s.db.Exec("DELETE FROM folder_index WHERE path = ?", p)
+		if !dryRun {
+			s.db.Exec("DELETE FROM folder_index WHERE path = ?", p)
+		}
 		prunedIndex++
 	}
 
@@ -339,7 +341,9 @@ func (s *Store) Prune(roots []string) (int, int, error) {
 	rows.Close()
 
 	for _, id := range toDeleteLog {
-		s.db.Exec("DELETE FROM sort_log WHERE id = ?", id)
+		if !dryRun {
+			s.db.Exec("DELETE FROM sort_log WHERE id = ?", id)
+		}
 		prunedLog++
 	}
 

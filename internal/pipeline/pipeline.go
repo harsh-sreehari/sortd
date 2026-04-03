@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"fmt"
 	"log"
 	"path/filepath"
 
@@ -20,9 +21,10 @@ type Pipeline struct {
 	LLM    llm.LLMBackend
 	Mover  *mover.Mover
 	AllowedRoots []string
+	NotifyFunc   func(title, message string)
 }
 
-func New(cfg *config.Config, s *store.Store, g *graph.Graph, l llm.LLMBackend, m *mover.Mover) *Pipeline {
+func New(cfg *config.Config, s *store.Store, g *graph.Graph, l llm.LLMBackend, m *mover.Mover, notify func(string, string)) *Pipeline {
 	return &Pipeline{
 		cfg:          cfg,
 		Store:        s,
@@ -30,6 +32,7 @@ func New(cfg *config.Config, s *store.Store, g *graph.Graph, l llm.LLMBackend, m
 		LLM:          l,
 		Mover:        m,
 		AllowedRoots: []string{}, // populated by caller via SetAllowedRoots()
+		NotifyFunc:   notify,
 	}
 }
 
@@ -139,6 +142,15 @@ Execution:
 	}
 
 	p.logDecision(decision)
+
+	if decision.Action == "moved" && p.cfg.Behaviour.Notifications && p.NotifyFunc != nil {
+		p.NotifyFunc("File Organized", fmt.Sprintf("Sorted %s to %s", filepath.Base(path), filepath.Base(decision.Destination)))
+	}
+
+	if decision.Action == "moved" && p.cfg.Behaviour.Xattr {
+		p.Mover.WriteXattr(decision.Destination, decision.Tags)
+	}
+
 	return decision
 }
 
