@@ -495,8 +495,8 @@ var reviewCmd = &cobra.Command{
 			folderPaths[i] = f.Path
 		}
 
-		for _, entry := range parked {
-			fmt.Printf("\n--------------------------------------------------\n")
+		for i, entry := range parked {
+			fmt.Printf("\n--- [%d/%d] ---\n", i+1, len(parked))
 			fmt.Printf("📄 File: \033[1m%s\033[0m\n", entry.OriginalFilename)
 			if entry.Reasoning != "" {
 				fmt.Printf("🤖 System said: \033[90m%s\033[0m\n", entry.Reasoning)
