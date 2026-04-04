@@ -93,7 +93,7 @@ func (s *Store) LogDecision(d Decision) error {
 		orig = d.File
 	}
 
-	_, err := s.db.Exec(query, d.File, orig, d.OriginalSource, d.File, d.Destination, d.Tier, d.Confidence, tags, d.Action, d.Reasoning)
+	_, err := s.db.Exec(query, d.File, orig, d.OriginalSource, d.OriginalSource, d.Destination, d.Tier, d.Confidence, tags, d.Action, d.Reasoning)
 	return err
 }
 

@@ -82,7 +82,14 @@ func (g *Graph) Crawl(roots []string, ignore []string) error {
 				return nil
 			}
 
-			// Depth check (TODO)
+			// Depth check: prevent crawling into deep node_modules, .cache, etc.
+			rel, err := filepath.Rel(root, path)
+			if err == nil && rel != "." {
+				depth := len(strings.Split(rel, string(filepath.Separator)))
+				if depth > 8 {
+					return filepath.SkipDir
+				}
+			}
 			
 			// Ignore check
 			for _, ig := range ignore {

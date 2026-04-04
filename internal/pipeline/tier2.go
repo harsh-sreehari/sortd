@@ -9,7 +9,7 @@ import (
 	"github.com/harsh-sreehari/sortd/internal/graph"
 )
 
-func MatchTier2(path string, folders []graph.FolderIndex) (Decision, bool) {
+func MatchTier2(path string, folders []graph.FolderIndex, threshold float64) (Decision, bool) {
 	filename := filepath.Base(path)
 	fileTokens := graph.TokenisePath(filename)
 
@@ -34,9 +34,7 @@ func MatchTier2(path string, folders []graph.FolderIndex) (Decision, bool) {
 		}
 	}
 
-	threshold := 0.75 // Spec-mandated minimum; keeps false-confident matches from
-	                   // bypassing Tier 3. Improve scoring algorithm if recall is low,
-	                   // not the threshold.
+	// Score threshold for Tier 2; scores below this fall through to Tier 3.
 	if bestScore >= threshold {
 		return Decision{
 			Path:           path,

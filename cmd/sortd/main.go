@@ -106,7 +106,7 @@ func sendNotification(title, message string) {
 	exec.Command("notify-send", "-a", "sortd", "-i", "folder", title, message).Run()
 }
 
-var version = "v1.4.0"
+var version = "v1.4.1"
 
 var rootCmd = &cobra.Command{
 	Use:     "sortd",

@@ -64,7 +64,7 @@ func (p *Pipeline) Match(path string) Decision {
 	// Tier 2: Fuzzy (needs folder keywords)
 	{
 		indices, _ := p.Graph.ListFolders()
-		if decision, match = MatchTier2(matchPath, indices); match {
+		if decision, match = MatchTier2(matchPath, indices, p.cfg.Behaviour.ConfidenceThreshold); match {
 			return decision
 		}
 	}
@@ -113,7 +113,9 @@ func (p *Pipeline) Process(path string) Decision {
 			// Validate restriction: Must start with one of the allowed categories
 			isAllowed := false
 			for _, a := range p.AllowedRoots {
-				if strings.HasPrefix(strings.ToLower(dest), strings.ToLower(a)) {
+				rootNorm := strings.TrimSuffix(strings.ToLower(a), "/")
+				destNorm := strings.TrimSuffix(strings.ToLower(dest), "/")
+				if strings.HasPrefix(destNorm, rootNorm) {
 					isAllowed = true
 					break
 				}
