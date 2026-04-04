@@ -681,9 +681,29 @@ var reviewCmd = &cobra.Command{
 
 var indexCmd = &cobra.Command{
 	Use:   "index",
+	Short: "Index management commands",
+}
+
+var indexCrawlCmd = &cobra.Command{
+	Use:   "crawl",
 	Short: "Re-crawl the folder tree and rebuild the index",
 	Run: func(cmd *cobra.Command, args []string) {
 		runIndex()
+	},
+}
+
+var indexTreeCmd = &cobra.Command{
+	Use:   "tree",
+	Short: "Visualize the current folder index as a tree",
+	Run: func(cmd *cobra.Command, args []string) {
+		_, st, _, err := initPipeline()
+		if err != nil {
+			log.Fatalf("Init failed: %v", err)
+		}
+		defer st.Close()
+
+		g := &graph.Graph{Store: st}
+		g.PrintTree()
 	},
 }
 
@@ -964,6 +984,60 @@ var pruneCmd = &cobra.Command{
 	},
 }
 
+var configCmd = &cobra.Command{
+	Use:   "config",
+	Short: "Configuration management commands",
+}
+
+var configCheckCmd = &cobra.Command{
+	Use:   "check",
+	Short: "Check the configuration for errors and connectivity",
+	Run: func(cmd *cobra.Command, args []string) {
+		home, _ := os.UserHomeDir()
+		configPath := filepath.Join(home, ".config/sortd/config.toml")
+		fmt.Printf("🔍 Checking config at %s...\n", configPath)
+
+		cfg, err := config.LoadConfig(configPath)
+		if err != nil {
+			fmt.Printf("❌ Failed to load config: %v\n", err)
+			return
+		}
+		fmt.Println("✅ Config file loaded successfully.")
+
+		// Dirs
+		if _, err := os.Stat(filepath.Dir(cfg.Behaviour.LogPath)); err != nil {
+			fmt.Printf("❌ Log directory missing or unreachable: %s\n", filepath.Dir(cfg.Behaviour.LogPath))
+		} else {
+			fmt.Println("✅ Log directory accessible.")
+		}
+
+		if _, err := os.Stat(filepath.Dir(cfg.Behaviour.DBPath)); err != nil {
+			fmt.Printf("❌ DB directory missing or unreachable: %s\n", filepath.Dir(cfg.Behaviour.DBPath))
+		} else {
+			fmt.Println("✅ DB directory accessible.")
+		}
+
+		// LLM
+		fmt.Printf("🔍 Checking LLM Backend at %s...\n", cfg.LLM.Host)
+		client := &http.Client{Timeout: 2 * time.Second}
+		resp, err := client.Get(cfg.LLM.Host + "/v1/models")
+		if err != nil {
+			fmt.Printf("❌ LLM Backend unreachable: %v\n", err)
+		} else {
+			fmt.Printf("✅ LLM Backend online (%s)\n", cfg.LLM.Model)
+			resp.Body.Close()
+		}
+
+		// pdftotext
+		_, err = exec.LookPath("pdftotext")
+		if err != nil {
+			fmt.Println("⚠️  pdftotext not found. PDF content parsing will be disabled.")
+		} else {
+			fmt.Println("✅ pdftotext found.")
+		}
+	},
+}
+
 var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show sortd daemon health and metrics",
@@ -1092,8 +1166,10 @@ func init() {
 	renameCmd.Flags().BoolVar(&renameBatch, "batch", false, "Rename all files in the given directory")
 	pruneCmd.Flags().BoolVar(&pruneConfirm, "confirm", false, "Actually apply the pruning changes")
 
+	configCmd.AddCommand(configCheckCmd)
+	indexCmd.AddCommand(indexCrawlCmd, indexTreeCmd)
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd)
-	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd, exportCmd, tagsCmd, renameCmd, pruneCmd, undoCmd, statusCmd)
+	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd, exportCmd, tagsCmd, renameCmd, pruneCmd, undoCmd, statusCmd, configCmd)
 }
 
 func main() {

@@ -9,6 +9,7 @@ import (
 	"unicode"
 
 	"database/sql"
+	"sort"
 	"github.com/harsh-sreehari/sortd/internal/store"
 )
 
@@ -221,4 +222,56 @@ func inferSchema(path string) string {
 		}
 	}
 	return ""
+}
+
+func (g *Graph) PrintTree() {
+	folders, err := g.ListFolders()
+	if err != nil {
+		fmt.Printf("Failed to list folders: %v\n", err)
+		return
+	}
+
+	tree := make(map[string][]string)
+	paths := make(map[string]bool)
+	for _, f := range folders {
+		paths[f.Path] = true
+	}
+
+	var roots []string
+	for _, f := range folders {
+		parent := filepath.Dir(f.Path)
+		if paths[parent] {
+			tree[parent] = append(tree[parent], f.Path)
+		} else {
+			roots = append(roots, f.Path)
+		}
+	}
+
+	sort.Strings(roots)
+	for i, r := range roots {
+		isLast := i == len(roots)-1
+		g.printBranch(r, "", isLast, tree)
+	}
+}
+
+func (g *Graph) printBranch(path string, indent string, isLast bool, tree map[string][]string) {
+	marker := "├── "
+	if isLast {
+		marker = "└── "
+	}
+	fmt.Printf("%s%s%s\n", indent, marker, filepath.Base(path))
+
+	newIndent := indent
+	if isLast {
+		newIndent += "    "
+	} else {
+		newIndent += "│   "
+	}
+
+	children := tree[path]
+	sort.Strings(children)
+	for i, child := range children {
+		isChildLast := i == len(children)-1
+		g.printBranch(child, newIndent, isChildLast, tree)
+	}
 }
