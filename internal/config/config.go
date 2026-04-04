@@ -39,6 +39,8 @@ type BehaviourConfig struct {
 	AllowedRoots        []string `toml:"allowed_roots"`
 	Notifications       bool     `toml:"notifications"`
 	Xattr              bool     `toml:"xattr"`
+	ConflictPolicy      string   `toml:"conflict_policy"`
+	AutoRename         bool     `toml:"auto_rename"`
 }
 
 func DefaultConfig() *Config {
@@ -60,6 +62,10 @@ func DefaultConfig() *Config {
 			LogPath:             "~/.local/share/sortd/sortd.log",
 			DBPath:              "~/.local/share/sortd/sortd.db",
 			DebounceSeconds:     2,
+			Notifications:       true,
+			Xattr:               true,
+			ConflictPolicy:      "rename",
+			AutoRename:         true,
 		},
 	}
 }

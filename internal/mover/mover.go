@@ -10,10 +10,15 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-type Mover struct{}
+type Mover struct {
+	ConflictPolicy string
+}
 
-func New() *Mover {
-	return &Mover{}
+func New(policy string) *Mover {
+	if policy == "" {
+		policy = "rename"
+	}
+	return &Mover{ConflictPolicy: policy}
 }
 
 func (m *Mover) GenerateUniquePath(dest string) string {
@@ -50,7 +55,18 @@ func (m *Mover) Move(src, dest string) (string, error) {
 		return srcAbs, nil
 	}
 
-	finalPath := m.GenerateUniquePath(destAbs)
+	finalPath := destAbs
+	if _, err := os.Stat(destAbs); err == nil {
+		switch m.ConflictPolicy {
+		case "skip":
+			return srcAbs, fmt.Errorf("conflict: skip policy")
+		case "rename":
+			finalPath = m.GenerateUniquePath(destAbs)
+		default:
+			// Default to rename if unknown
+			finalPath = m.GenerateUniquePath(destAbs)
+		}
+	}
 
 	destDir := filepath.Dir(finalPath)
 	if err := os.MkdirAll(destDir, 0755); err != nil {

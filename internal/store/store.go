@@ -448,6 +448,21 @@ func (s *Store) AggregatedTags(folder string) ([]TagStat, error) {
 	return stats, nil
 }
 
+func (s *Store) GetFolderCache(path string) (int64, string, string, bool) {
+	var mtime int64
+	var keywords, schema string
+	err := s.db.QueryRow("SELECT mtime, keywords, schema FROM folder_cache WHERE path = ?", path).Scan(&mtime, &keywords, &schema)
+	if err != nil {
+		return 0, "", "", false
+	}
+	return mtime, keywords, schema, true
+}
+
+func (s *Store) UpdateFolderCache(path string, mtime int64, keywords string, schema string) error {
+	_, err := s.db.Exec("INSERT OR REPLACE INTO folder_cache (path, mtime, keywords, schema) VALUES (?, ?, ?, ?)", path, mtime, keywords, schema)
+	return err
+}
+
 func (s *Store) DB() *sql.DB {
 	return s.db
 }

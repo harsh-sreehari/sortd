@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -27,6 +28,7 @@ import (
 	"github.com/harsh-sreehari/sortd/internal/pipeline"
 	"github.com/harsh-sreehari/sortd/internal/store"
 	"github.com/harsh-sreehari/sortd/internal/watcher"
+	"github.com/harsh-sreehari/sortd/internal/ui"
 )
 
 // serviceTemplate is the canonical source for the systemd service.
@@ -67,7 +69,7 @@ func initPipeline() (*config.Config, *store.Store, *pipeline.Pipeline, error) {
 		Host:  cfg.LLM.Host,
 		Model: cfg.LLM.Model,
 	}
-	mv := mover.New()
+	mv := mover.New(cfg.Behaviour.ConflictPolicy)
 
 	pipe := pipeline.New(cfg, st, gr, llmBackend, mv, sendNotification)
 
@@ -104,7 +106,7 @@ func sendNotification(title, message string) {
 	exec.Command("notify-send", "-a", "sortd", "-i", "folder", title, message).Run()
 }
 
-var version = "v1.3.1"
+var version = "v1.4.0"
 
 var rootCmd = &cobra.Command{
 	Use:     "sortd",
@@ -340,12 +342,12 @@ var logCmd = &cobra.Command{
 		}
 
 		// ANSI Colors
-		reset := "\033[0m"
-		bold := "\033[1m"
-		green := "\033[32m"
-		yellow := "\033[33m"
-		cyan := "\033[36m"
-		gray := "\033[90m"
+		reset := ui.Reset
+		bold := ui.Bold
+		green := ui.Green
+		yellow := ui.Yellow
+		cyan := ui.Cyan
+		gray := ui.Gray
 
 		if logVerbose {
 			fmt.Printf("Displaying %d detailed logs:\n\n", len(logs))
@@ -472,6 +474,50 @@ var findCmd = &cobra.Command{
 	},
 }
 
+var explainCmd = &cobra.Command{
+	Use:   "explain <file>",
+	Short: "Audit why sortd would classify a file in a certain way",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg, _, pipe, err := initPipeline()
+		if err != nil {
+			log.Fatalf("Init failed: %v", err)
+		}
+
+		path := args[0]
+		if _, err := os.Stat(path); err != nil {
+			log.Fatalf("File not found: %s", path)
+		}
+
+		fmt.Printf("🔍 Auditing classification for: %s\n\n", path)
+
+		// 1. Name Analysis
+		base := filepath.Base(path)
+		fmt.Printf("📄 Filename: %s\n", base)
+		if cfg.Behaviour.AutoRename {
+			fmt.Printf("✨ Auto-Rename: Enabled (Normalizing before matching)\n")
+		}
+
+		decision := pipe.Match(path)
+
+		fmt.Printf("🎯 Decision: %s%s%s\n", ui.BoldGreen, decision.Action, ui.Reset)
+		if decision.Action == "moved" {
+			fmt.Printf("📂 Target  : %s\n", decision.Destination)
+		}
+		fmt.Printf("⚖️  Tier    : %d\n", decision.Tier)
+		fmt.Printf("📈 Confid. : %.2f\n", decision.Confidence)
+
+		if decision.Reasoning != "" {
+			fmt.Printf("\n🤖 Reasoning:\n%s%s%s\n", ui.Gray, decision.Reasoning, ui.Reset)
+		}
+
+		if len(decision.Tags) > 0 {
+			fmt.Printf("\n🏷️  Suggested Tags: %s\n", strings.Join(decision.Tags, ", "))
+		}
+		fmt.Println()
+	},
+}
+
 var (
 	exportFormat string
 	exportOutput string
@@ -558,13 +604,21 @@ var tagsCmd = &cobra.Command{
 			fmt.Println("\n🏷️  Tag Analytics (Global)")
 		}
 		fmt.Println(strings.Repeat("-", 30))
+		sort.Slice(stats, func(i, j int) bool {
+			return stats[i].Tag < stats[j].Tag
+		})
+
 		for _, s := range stats {
-			// Basic text bar representation
+			parts := strings.Split(s.Tag, "/")
+			level := len(parts) - 1
+			indent := strings.Repeat("  ", level)
+			tagName := parts[level]
+
 			bar := ""
 			for i := 0; i < s.Count && i < 40; i++ {
 				bar += "■"
 			}
-			fmt.Printf("%15s | %-5d %s\n", s.Tag, s.Count, bar)
+			fmt.Printf("%-20s | %-5d %s\n", indent+tagName, s.Count, bar)
 		}
 	},
 }
@@ -1052,7 +1106,7 @@ var statusCmd = &cobra.Command{
 		fmt.Println(strings.Repeat("━", 40))
 
 		// 1. Daemon Status
-		daemonStatus := "\033[31mOffline\033[0m"
+		daemonStatus := ui.Red + "Offline" + ui.Reset
 		pidPath := getPidPath()
 		if _, err := os.Stat(pidPath); err == nil {
 			if b, err := os.ReadFile(pidPath); err == nil {
@@ -1062,7 +1116,7 @@ var statusCmd = &cobra.Command{
 					if err == nil {
 						// On Unix, FindProcess always succeeds. Need to signal 0 to check existence.
 						if err := process.Signal(syscall.Signal(0)); err == nil {
-							daemonStatus = "\033[32mActive (PID " + strconv.Itoa(pid) + ")\033[0m"
+							daemonStatus = ui.Green + "Active (PID " + strconv.Itoa(pid) + ")" + ui.Reset
 						}
 					}
 				}
@@ -1071,11 +1125,11 @@ var statusCmd = &cobra.Command{
 		fmt.Printf("%-20s: %s\n", "Daemon State", daemonStatus)
 
 		// 2. LLM Health
-		llmStatus := "\033[31mUnreachable\033[0m"
+		llmStatus := ui.Red + "Unreachable" + ui.Reset
 		client := &http.Client{Timeout: 2 * time.Second}
 		resp, err := client.Get(cfg.LLM.Host + "/v1/models")
 		if err == nil {
-			llmStatus = "\033[32mOnline\033[0m (" + cfg.LLM.Model + ")"
+			llmStatus = ui.Green + "Online" + ui.Reset + " (" + cfg.LLM.Model + ")"
 			resp.Body.Close()
 		}
 		fmt.Printf("%-20s: %s\n", "LLM Backend", llmStatus)
@@ -1169,7 +1223,7 @@ func init() {
 	configCmd.AddCommand(configCheckCmd)
 	indexCmd.AddCommand(indexCrawlCmd, indexTreeCmd)
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd)
-	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd, exportCmd, tagsCmd, renameCmd, pruneCmd, undoCmd, statusCmd, configCmd)
+	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd, exportCmd, explainCmd, tagsCmd, renameCmd, pruneCmd, undoCmd, statusCmd, configCmd)
 }
 
 func main() {

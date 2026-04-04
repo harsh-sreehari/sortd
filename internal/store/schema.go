@@ -35,6 +35,14 @@ CREATE TABLE IF NOT EXISTS affinities (
     weight  REAL NOT NULL DEFAULT 1.0,
     PRIMARY KEY (tag, folder)
 );`
+
+	FolderCacheSchema = `
+CREATE TABLE IF NOT EXISTS folder_cache (
+    path     TEXT PRIMARY KEY,
+    mtime    INTEGER NOT NULL,
+    keywords TEXT NOT NULL,
+    schema   TEXT
+);`
 )
 
-var Schemas = []string{SortLogSchema, FolderIndexSchema, AffinitiesSchema}
+var Schemas = []string{SortLogSchema, FolderIndexSchema, AffinitiesSchema, FolderCacheSchema}

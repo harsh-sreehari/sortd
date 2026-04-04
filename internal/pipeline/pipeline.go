@@ -11,6 +11,7 @@ import (
 	"github.com/harsh-sreehari/sortd/internal/mover"
 	"github.com/harsh-sreehari/sortd/internal/store"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -42,28 +43,29 @@ func (p *Pipeline) SetAllowedRoots(roots []string) {
 	p.AllowedRoots = roots
 }
 
-func (p *Pipeline) Process(path string) Decision {
+func (p *Pipeline) Match(path string) Decision {
 	var decision Decision
 	var match bool
 
+	matchPath := path
+	if p.cfg.Behaviour.AutoRename {
+		matchPath = p.cleanPath(path)
+	}
+
 	// Tier 1: Rules
-	if decision, match = MatchTier1(path); match {
-		// B9: Resolve Tier 1 destinations to absolute paths at match time.
-		// Tier 1 returns relative paths like "Software/" or "Documents/".
-		// Resolving here ensures the Execution block's AllowedRoots check
-		// (which only guards Tier 3) never mishandles Tier 1 destinations.
+	if decision, match = MatchTier1(matchPath); match {
 		if !filepath.IsAbs(decision.Destination) {
 			home, _ := os.UserHomeDir()
 			decision.Destination = filepath.Join(home, decision.Destination)
 		}
-		goto Execution
+		return decision
 	}
 
 	// Tier 2: Fuzzy (needs folder keywords)
 	{
 		indices, _ := p.Graph.ListFolders()
-		if decision, match = MatchTier2(path, indices); match {
-			goto Execution
+		if decision, match = MatchTier2(matchPath, indices); match {
+			return decision
 		}
 	}
 
@@ -71,20 +73,23 @@ func (p *Pipeline) Process(path string) Decision {
 	{
 		tree, _ := p.Graph.GetAllPaths()
 		affinities, _ := p.Store.GetAffinities(nil)
-		if decision, match = MatchTier3(path, p.LLM, tree, p.AllowedRoots, p.cfg.Behaviour.ConfidenceThreshold, affinities); match {
-			goto Execution
+		if decision, match = MatchTier3(matchPath, p.LLM, tree, p.AllowedRoots, p.cfg.Behaviour.ConfidenceThreshold, affinities); match {
+			return decision
 		}
 	}
 
 	// Default: Park
-	decision = Decision{
+	return Decision{
 		Path:           path,
 		OriginalSource: filepath.Dir(path),
 		Action:         "parked",
 		Tier:           0,
 	}
+}
 
-Execution:
+func (p *Pipeline) Process(path string) Decision {
+	decision := p.Match(path)
+
 	// Execute the action with the mover
 	if decision.Action == "skipped" {
 		p.logDecision(decision)
@@ -151,6 +156,24 @@ Execution:
 	}
 
 	return decision
+}
+
+func (p *Pipeline) cleanPath(originalPath string) string {
+	dir := filepath.Dir(originalPath)
+	base := filepath.Base(originalPath)
+	ext := filepath.Ext(base)
+	name := strings.TrimSuffix(base, ext)
+
+	// Strip common suffixes: (1), [1], _1, -1, " copy"
+	re := regexp.MustCompile(`(?i)( \(\d+\)|_\d+|\[\d+\]| copy)$`)
+	name = re.ReplaceAllString(name, "")
+
+	// Normalize separators for better keyword matching
+	name = strings.ReplaceAll(name, "_", " ")
+	name = strings.ReplaceAll(name, "-", " ")
+	name = strings.TrimSpace(name)
+
+	return filepath.Join(dir, name+ext)
 }
 
 func (p *Pipeline) logDecision(d Decision) {

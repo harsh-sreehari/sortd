@@ -96,25 +96,36 @@ func (g *Graph) Crawl(roots []string, ignore []string) error {
 				return filepath.SkipDir
 			}
 
-			// Tokenize folder name
 			tokens := TokenisePath(info.Name())
 			if len(tokens) == 0 {
 				return nil
 			}
 
-			// FEAT-12: Index sibling filenames as additional keywords
-			dirEntries, _ := os.ReadDir(path)
-			var fileTokens []string
-			for _, e := range dirEntries {
-				if !e.IsDir() {
-					fTokens := TokenisePath(strings.TrimSuffix(e.Name(), filepath.Ext(e.Name())))
-					fileTokens = append(fileTokens, fTokens...)
+			var schema string
+			mtime := info.ModTime().Unix()
+			if cachedMtime, cachedKeywords, cachedSchema, ok := g.Store.GetFolderCache(path); ok && cachedMtime == mtime {
+				tokens = strings.Split(cachedKeywords, ",")
+				schema = cachedSchema
+			} else {
+				// FEAT-12: Index sibling filenames as additional keywords
+				dirEntries, _ := os.ReadDir(path)
+				var fileTokens []string
+				for _, e := range dirEntries {
+					if !e.IsDir() {
+						fTokens := TokenisePath(strings.TrimSuffix(e.Name(), filepath.Ext(e.Name())))
+						fileTokens = append(fileTokens, fTokens...)
+					}
+					if len(fileTokens) > 100 {
+						break
+					}
 				}
-				if len(fileTokens) > 100 {
-					break
-				}
+				tokens = deduplicate(append(tokens, fileTokens...))
+				schema = inferSchema(path)
+
+				// Update persistent cache
+				keywords := strings.Join(tokens, ",")
+				g.Store.UpdateFolderCache(path, mtime, keywords, schema)
 			}
-			tokens = deduplicate(append(tokens, fileTokens...))
 
 			// Store in index
 			keywords := strings.Join(tokens, ",")
@@ -122,7 +133,6 @@ func (g *Graph) Crawl(roots []string, ignore []string) error {
 			// Get parent folder if any
 			parent := filepath.Dir(path)
 			depth := len(strings.Split(path, string(filepath.Separator)))
-			schema := inferSchema(path)
 
 			_, err = g.Store.DB().Exec("INSERT OR REPLACE INTO folder_index (path, keywords, depth, parent, schema) VALUES (?, ?, ?, ?, ?)", path, keywords, depth, parent, schema)
 			if err != nil {

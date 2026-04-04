@@ -7,7 +7,7 @@ import (
 )
 
 func TestMoverCollision(t *testing.T) {
-	m := New()
+	m := New("rename")
 	tmpDir, err := os.MkdirTemp("", "sortd-mover")
 	if err != nil {
 		t.Fatal(err)
@@ -24,7 +24,7 @@ func TestMoverCollision(t *testing.T) {
 }
 
 func TestMoverMove(t *testing.T) {
-	m := New()
+	m := New("rename")
 	tmpDir, err := os.MkdirTemp("", "sortd-mover-test")
 	if err != nil {
 		t.Fatal(err)
