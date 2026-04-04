@@ -31,12 +31,13 @@ func MatchTier2(path string, folders []graph.FolderIndex) (Decision, bool) {
 	                   // not the threshold.
 	if bestScore >= threshold {
 		return Decision{
-			Path:        path,
-			Destination: bestFolder,
-			Confidence:  bestScore,
-			Tier:        2,
-			Action:      "moved",
-			Reasoning:   fmt.Sprintf("Tier 2: Fuzzy match on folder '%s' (score %.2f)", filepath.Base(bestFolder), bestScore),
+			Path:           path,
+			OriginalSource: filepath.Dir(path),
+			Destination:    bestFolder,
+			Confidence:     bestScore,
+			Tier:           2,
+			Action:         "moved",
+			Reasoning:      "Tier 2: Fuzzy match on folder '" + filepath.Base(bestFolder) + "' (score " + fmt.Sprintf("%.2f", bestScore) + ")",
 		}, true
 	}
 

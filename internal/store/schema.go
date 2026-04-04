@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS sort_log (
     tags              TEXT,
     action            TEXT NOT NULL,
     reasoning         TEXT,
-    corrected         INTEGER DEFAULT 0
+    corrected         INTEGER DEFAULT 0,
+    original_source   TEXT NOT NULL DEFAULT ''
 );`
 
 	FolderIndexSchema = `

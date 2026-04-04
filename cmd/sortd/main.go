@@ -28,9 +28,7 @@ import (
 	"github.com/harsh-sreehari/sortd/internal/watcher"
 )
 
-// serviceTemplate is the systemd user service unit embedded directly in the binary.
-// This ensures sortd init works from any install location without needing the
-// sortd.service file present on disk.
+// serviceTemplate is the canonical source for the systemd service.
 const serviceTemplate = `[Unit]
 Description=sortd context-aware file organizer daemon
 After=graphical-session.target
@@ -105,7 +103,7 @@ func sendNotification(title, message string) {
 	exec.Command("notify-send", "-a", "sortd", "-i", "folder", title, message).Run()
 }
 
-var version = "dev"
+var version = "v1.3.1"
 
 var rootCmd = &cobra.Command{
 	Use:     "sortd",
@@ -278,6 +276,7 @@ var (
 	logParked bool
 	logToday  bool
 	logTag    string
+	logSince  string
 	logLimit  int
 	logVerbose bool
 )
@@ -307,6 +306,9 @@ var logCmd = &cobra.Command{
 		}
 		if logTag != "" {
 			filters["tag"] = logTag
+		}
+		if logSince != "" {
+			filters["since"] = logSince
 		}
 
 		logs, err := st.SearchLog(logLimit, filters)
@@ -668,8 +670,8 @@ var undoCmd = &cobra.Command{
 				continue
 			}
 
-			// Reverse the move: destination back to source dir
-			srcDir := filepath.Dir(m.Source)
+			// Reverse the move: destination back to original source directory
+			srcDir := m.OriginalSource
 			
 			// If source directory doesn't exist anymore, create it
 			os.MkdirAll(srcDir, 0755)
@@ -840,7 +842,6 @@ var renameCmd = &cobra.Command{
 }
 
 var (
-	pruneDryRun bool
 	pruneConfirm bool
 )
 
@@ -861,23 +862,14 @@ var pruneCmd = &cobra.Command{
 		}
 		defer st.Close()
 
-		if !pruneConfirm && pruneDryRun {
+		if !pruneConfirm {
 			fmt.Println("🔍 [DRY RUN] Scanning for stale records (no changes will be applied)...")
-			// We need a way to see what WOULD be pruned. 
-			// Let's assume store.Prune can take a dryRun boolean or we implement a Preview method.
-			// For now, we'll just report what the current Prune would do if we didn't commit,
-			// but since Prune handles it internally, we'll add a DryRun parameter to it.
 			prunedIndex, prunedLog, err := st.Prune(cfg.Watch.Folders, true)
 			if err != nil {
 				log.Fatalf("Dry run failed: %v", err)
 			}
 			fmt.Printf("\n💡 Would prune %d folder index entries and %d log entries.\n", prunedIndex, prunedLog)
-			fmt.Println("▶ Use 'sortd prune --confirm' to apply these changes.")
-			return
-		}
-
-		if !pruneConfirm {
-			fmt.Println("⚠️  Cleanup requires explicit confirmation. Use --confirm or rely on default dry-run.")
+			fmt.Println("▶ Run 'sortd prune --confirm' to apply these changes.")
 			return
 		}
 
@@ -1010,12 +1002,12 @@ func init() {
 	logCmd.Flags().StringVar(&logTag, "tag", "", "Filter by tag")
 	logCmd.Flags().IntVarP(&logLimit, "limit", "n", 20, "Number of logs to show")
 	logCmd.Flags().BoolVar(&logVerbose, "verbose", false, "Show detailed reasoning from LLM")
+	logCmd.Flags().StringVar(&logSince, "since", "", "Filter results since a duration (e.g. 24h, 7d, 2w)")
 
 	findCmd.Flags().StringVar(&findTag, "tag", "", "Filter results by specific tag")
-	findCmd.Flags().StringVar(&findSince, "since", "", "Filter results since a duration (e.g. 24h, 7d)")
+	findCmd.Flags().StringVar(&findSince, "since", "", "Filter results since a duration (e.g. 24h, 7d, 2w)")
 	tagsCmd.Flags().StringVar(&tagsFolder, "folder", "", "Show tags only for this destination folder")
 	renameCmd.Flags().BoolVar(&renameBatch, "batch", false, "Rename all files in the given directory")
-	pruneCmd.Flags().BoolVar(&pruneDryRun, "dry-run", true, "Show what would be pruned without applying changes")
 	pruneCmd.Flags().BoolVar(&pruneConfirm, "confirm", false, "Actually apply the pruning changes")
 
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd)

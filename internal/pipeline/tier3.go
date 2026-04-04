@@ -32,21 +32,23 @@ func MatchTier3(path string, l llm.LLMBackend, folders []string, allowedRoots []
 	// 4. Determine decision
 	if resp.Confidence >= threshold {
 		return Decision{
-			Path:        path,
-			Destination: resp.Destination,
-			Confidence:  resp.Confidence,
-			Tier:        3,
-			Action:      "moved",
-			Tags:        resp.Tags,
-			Reasoning:   "Tier 3: LLM reasoning: " + resp.Reasoning,
+			Path:           path,
+			OriginalSource: filepath.Dir(path),
+			Destination:    resp.Destination,
+			Confidence:     resp.Confidence,
+			Tier:           3,
+			Action:         "moved",
+			Tags:           resp.Tags,
+			Reasoning:      "Tier 3: LLM reasoning: " + resp.Reasoning,
 		}, true
 	}
 
 	return Decision{
-		Path:        path,
-		Confidence:  resp.Confidence,
-		Tier:        3,
-		Action:      "parked",
-		Reasoning:   "Tier 3: Low confidence, parking in .unsorted",
+		Path:           path,
+		OriginalSource: filepath.Dir(path),
+		Confidence:     resp.Confidence,
+		Tier:           3,
+		Action:         "parked",
+		Reasoning:      "Tier 3: Low confidence, parking in .unsorted",
 	}, true
 }

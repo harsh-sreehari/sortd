@@ -78,9 +78,10 @@ func (p *Pipeline) Process(path string) Decision {
 
 	// Default: Park
 	decision = Decision{
-		Path:   path,
-		Action: "parked",
-		Tier:   0,
+		Path:           path,
+		OriginalSource: filepath.Dir(path),
+		Action:         "parked",
+		Tier:           0,
 	}
 
 Execution:
@@ -122,8 +123,6 @@ Execution:
 			dest = filepath.Join(home, dest)
 		}
 		
-		// ALWAYS join filename to the destination to ensure it stays a directory
-		dest = filepath.Join(dest, filepath.Base(path))
 		finalPath, err = p.Mover.Move(path, dest)
 	} else {
 		finalPath, err = p.Mover.Park(path, root)
@@ -157,12 +156,14 @@ Execution:
 func (p *Pipeline) logDecision(d Decision) {
 	log.Printf("PIPELINE [%d] -> %s -> %s (%0.2f)", d.Tier, d.Action, d.Destination, d.Confidence)
 	p.Store.LogDecision(store.Decision{
-		File:        d.Path,
-		Destination: d.Destination,
-		Tier:        d.Tier,
-		Confidence:  d.Confidence,
-		Action:      d.Action,
-		Tags:        d.Tags,
-		Reasoning:   d.Reasoning,
+		File:             d.Path,
+		OriginalFilename: filepath.Base(d.Path),
+		OriginalSource:   d.OriginalSource,
+		Destination:      d.Destination,
+		Tier:             d.Tier,
+		Confidence:       d.Confidence,
+		Action:           d.Action,
+		Tags:             d.Tags,
+		Reasoning:        d.Reasoning,
 	})
 }

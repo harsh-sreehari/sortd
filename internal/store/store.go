@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,12 +36,13 @@ type LogEntry struct {
 	Action           string
 	Reasoning        string
 	Corrected        int
+	OriginalSource   string
 }
 
-// Decision representation placeholder
 type Decision struct {
 	File             string
 	OriginalFilename string
+	OriginalSource   string
 	Destination      string
 	Tags             []string
 	Tier             int
@@ -69,13 +71,14 @@ func Open(dbPath string) (*Store, error) {
 	// Safe column additions for existing databases
 	_, _ = db.Exec("ALTER TABLE sort_log ADD COLUMN original_filename TEXT NOT NULL DEFAULT ''")
 	_, _ = db.Exec("ALTER TABLE sort_log ADD COLUMN reasoning TEXT")
+	_, _ = db.Exec("ALTER TABLE sort_log ADD COLUMN original_source TEXT NOT NULL DEFAULT ''")
 
 	return &Store{db: db}, nil
 }
 
 func (s *Store) LogDecision(d Decision) error {
-	query := `INSERT INTO sort_log (timestamp, filename, original_filename, source, destination, tier, confidence, tags, action, reasoning) 
-			  VALUES (datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	query := `INSERT INTO sort_log (timestamp, filename, original_filename, original_source, source, destination, tier, confidence, tags, action, reasoning) 
+			  VALUES (datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	
 	tags := "[]"
 	if len(d.Tags) > 0 {
@@ -89,12 +92,12 @@ func (s *Store) LogDecision(d Decision) error {
 		orig = d.File
 	}
 
-	_, err := s.db.Exec(query, d.File, orig, d.File, d.Destination, d.Tier, d.Confidence, tags, d.Action, d.Reasoning)
+	_, err := s.db.Exec(query, d.File, orig, d.OriginalSource, d.File, d.Destination, d.Tier, d.Confidence, tags, d.Action, d.Reasoning)
 	return err
 }
 
 func (s *Store) RecentLog(n int) ([]LogEntry, error) {
-	query := `SELECT id, timestamp, filename, original_filename, source, destination, tier, confidence, tags, action, reasoning, corrected 
+	query := `SELECT id, timestamp, filename, original_filename, original_source, source, destination, tier, confidence, tags, action, reasoning, corrected 
 			  FROM sort_log ORDER BY id DESC LIMIT ?`
 	rows, err := s.db.Query(query, n)
 	if err != nil {
@@ -105,19 +108,25 @@ func (s *Store) RecentLog(n int) ([]LogEntry, error) {
 	var entries []LogEntry
 	for rows.Next() {
 		var e LogEntry
-		var origName, reason sql.NullString
-		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Filename, &origName, &e.Source, &e.Destination, &e.Tier, &e.Confidence, &e.Tags, &e.Action, &reason, &e.Corrected); err != nil {
+		var origName, reason, origSrc sql.NullString
+		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Filename, &origName, &origSrc, &e.Source, &e.Destination, &e.Tier, &e.Confidence, &e.Tags, &e.Action, &reason, &e.Corrected); err != nil {
 			return nil, err
 		}
 		e.OriginalFilename = origName.String
 		e.Reasoning = reason.String
+		e.OriginalSource = origSrc.String
 		entries = append(entries, e)
 	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return entries, nil
 }
 
 func (s *Store) UnsortedFiles() ([]LogEntry, error) {
-	query := `SELECT id, timestamp, filename, original_filename, source, destination, tier, confidence, tags, action, reasoning, corrected 
+	query := `SELECT id, timestamp, filename, original_filename, original_source, source, destination, tier, confidence, tags, action, reasoning, corrected 
 			  FROM sort_log WHERE action = 'parked' AND corrected = 0 ORDER BY id ASC`
 	rows, err := s.db.Query(query)
 	if err != nil {
@@ -128,20 +137,26 @@ func (s *Store) UnsortedFiles() ([]LogEntry, error) {
 	var entries []LogEntry
 	for rows.Next() {
 		var e LogEntry
-		var origName, reason sql.NullString
-		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Filename, &origName, &e.Source, &e.Destination, &e.Tier, &e.Confidence, &e.Tags, &e.Action, &reason, &e.Corrected); err != nil {
+		var origName, reason, origSrc sql.NullString
+		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Filename, &origName, &origSrc, &e.Source, &e.Destination, &e.Tier, &e.Confidence, &e.Tags, &e.Action, &reason, &e.Corrected); err != nil {
 			return nil, err
 		}
 		e.OriginalFilename = origName.String
 		e.Reasoning = reason.String
+		e.OriginalSource = origSrc.String
 		entries = append(entries, e)
 	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return entries, nil
 }
 
 // GetUndoableMoves returns the last N entries that were either moved or parked.
 func (s *Store) GetUndoableMoves(n int) ([]LogEntry, error) {
-	query := `SELECT id, timestamp, filename, original_filename, source, destination, tier, confidence, tags, action, reasoning, corrected 
+	query := `SELECT id, timestamp, filename, original_filename, original_source, source, destination, tier, confidence, tags, action, reasoning, corrected 
 			  FROM sort_log WHERE action IN ('moved', 'parked') ORDER BY timestamp DESC, id DESC LIMIT ?`
 	rows, err := s.db.Query(query, n)
 	if err != nil {
@@ -152,14 +167,20 @@ func (s *Store) GetUndoableMoves(n int) ([]LogEntry, error) {
 	var entries []LogEntry
 	for rows.Next() {
 		var e LogEntry
-		var origName, reason sql.NullString
-		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Filename, &origName, &e.Source, &e.Destination, &e.Tier, &e.Confidence, &e.Tags, &e.Action, &reason, &e.Corrected); err != nil {
+		var origName, reason, origSrc sql.NullString
+		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Filename, &origName, &origSrc, &e.Source, &e.Destination, &e.Tier, &e.Confidence, &e.Tags, &e.Action, &reason, &e.Corrected); err != nil {
 			return nil, err
 		}
 		e.OriginalFilename = origName.String
 		e.Reasoning = reason.String
+		e.OriginalSource = origSrc.String
 		entries = append(entries, e)
 	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return entries, nil
 }
 
@@ -188,7 +209,7 @@ func (s *Store) SearchLog(n int, filters map[string]string) ([]LogEntry, error) 
 		where += " AND DATE(timestamp) = DATE('now')"
 	}
 	if val, ok := filters["since"]; ok && val != "" {
-		if dur, err := time.ParseDuration(val); err == nil {
+		if dur, err := parseHumanDuration(val); err == nil {
 			cutoff := time.Now().Add(-dur).Format("2006-01-02 15:04:05")
 			where += " AND timestamp >= ?"
 			args = append(args, cutoff)
@@ -200,7 +221,7 @@ func (s *Store) SearchLog(n int, filters map[string]string) ([]LogEntry, error) 
 		args = append(args, pattern, pattern, pattern)
 	}
 
-	query := fmt.Sprintf(`SELECT id, timestamp, filename, original_filename, source, destination, tier, confidence, tags, action, reasoning, corrected 
+	query := fmt.Sprintf(`SELECT id, timestamp, filename, original_filename, original_source, source, destination, tier, confidence, tags, action, reasoning, corrected 
 			  FROM sort_log %s ORDER BY id DESC LIMIT ?`, where)
 	args = append(args, n)
 
@@ -213,14 +234,20 @@ func (s *Store) SearchLog(n int, filters map[string]string) ([]LogEntry, error) 
 	var entries []LogEntry
 	for rows.Next() {
 		var e LogEntry
-		var origName, reason sql.NullString
-		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Filename, &origName, &e.Source, &e.Destination, &e.Tier, &e.Confidence, &e.Tags, &e.Action, &reason, &e.Corrected); err != nil {
+		var origName, reason, origSrc sql.NullString
+		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Filename, &origName, &origSrc, &e.Source, &e.Destination, &e.Tier, &e.Confidence, &e.Tags, &e.Action, &reason, &e.Corrected); err != nil {
 			return nil, err
 		}
 		e.OriginalFilename = origName.String
 		e.Reasoning = reason.String
+		e.OriginalSource = origSrc.String
 		entries = append(entries, e)
 	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return entries, nil
 }
 
@@ -272,6 +299,11 @@ func (s *Store) GetAffinities(tags []string) (map[string]float64, error) {
 				affinities[fmt.Sprintf("%s->%s", tag, folder)] = weight
 			}
 		}
+
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+
 		return affinities, nil
 	}
 
@@ -289,6 +321,7 @@ func (s *Store) GetAffinities(tags []string) (map[string]float64, error) {
 		}
 		rows.Close()
 	}
+
 	return affinities, nil
 }
 
@@ -318,6 +351,11 @@ func (s *Store) Prune(roots []string, dryRun bool) (int, int, error) {
 			toDeleteIndex = append(toDeleteIndex, p)
 		}
 	}
+
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return 0, 0, err
+	}
 	rows.Close()
 
 	for _, p := range toDeleteIndex {
@@ -337,6 +375,11 @@ func (s *Store) Prune(roots []string, dryRun bool) (int, int, error) {
 		if _, err := os.Stat(dest); os.IsNotExist(err) {
 			toDeleteLog = append(toDeleteLog, id)
 		}
+	}
+
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return prunedIndex, prunedLog, err
 	}
 	rows.Close()
 
@@ -397,6 +440,10 @@ func (s *Store) AggregatedTags(folder string) ([]TagStat, error) {
 		return stats[i].Count > stats[j].Count
 	})
 
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return stats, nil
 }
 
@@ -446,4 +493,22 @@ func (s *Store) GetStatusMetrics() (GlobalStatus, error) {
 	}
 
 	return gs, nil
+}
+
+func parseHumanDuration(s string) (time.Duration, error) {
+	if strings.HasSuffix(s, "d") {
+		days, err := strconv.Atoi(strings.TrimSuffix(s, "d"))
+		if err != nil {
+			return 0, err
+		}
+		return time.Duration(days) * 24 * time.Hour, nil
+	}
+	if strings.HasSuffix(s, "w") {
+		weeks, err := strconv.Atoi(strings.TrimSuffix(s, "w"))
+		if err != nil {
+			return 0, err
+		}
+		return time.Duration(weeks) * 7 * 24 * time.Hour, nil
+	}
+	return time.ParseDuration(s)
 }

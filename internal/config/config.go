@@ -77,13 +77,14 @@ func LoadConfig(path string) (*Config, error) {
 	config := DefaultConfig()
 
 	// Parse file
-	_, err := toml.DecodeFile(path, config)
-	if err != nil && os.IsNotExist(err) {
+	if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
 		if err := writeDefaultConfig(path); err != nil {
 			return nil, err
 		}
-	} else if err != nil {
-		return nil, err
+	} else {
+		if _, err := toml.DecodeFile(path, config); err != nil {
+			return nil, err
+		}
 	}
 
 	// Expand paths

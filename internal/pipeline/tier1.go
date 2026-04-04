@@ -10,9 +10,10 @@ type Decision struct {
 	Destination string
 	Confidence  float64
 	Tier        int
-	Action      string
-	Reasoning   string
-	Tags        []string
+	Action           string
+	Reasoning        string
+	Tags             []string
+	OriginalSource   string
 }
 
 type Rule struct {
@@ -38,12 +39,13 @@ func MatchTier1(path string) (Decision, bool) {
 		for _, rExt := range rule.Extensions {
 			if ext == rExt {
 				return Decision{
-					Path:        path,
-					Destination: rule.Destination,
-					Confidence:  1.0,
-					Tier:        1,
-					Action:      rule.Action,
-					Reasoning:   "Tier 1: Extension rule match",
+					Path:           path,
+					OriginalSource: filepath.Dir(path),
+					Destination:    rule.Destination,
+					Confidence:     1.0,
+					Tier:           1,
+					Action:         rule.Action,
+					Reasoning:      "Tier 1: Extension rule match",
 				}, true
 			}
 		}

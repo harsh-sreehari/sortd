@@ -135,6 +135,13 @@ func (w *Watcher) shouldFilter(path string) bool {
 		return true
 	}
 
+	for _, pattern := range w.cfg.Watch.Ignore {
+		matched, _ := filepath.Match(pattern, path)
+		if matched || strings.HasPrefix(path, pattern) {
+			return true
+		}
+	}
+
 	return false
 }
 
