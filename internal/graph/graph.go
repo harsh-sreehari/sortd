@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode"
 
+	"database/sql"
 	"github.com/harsh-sreehari/sortd/internal/store"
 )
 
@@ -19,6 +20,7 @@ type FolderIndex struct {
 	Path     string
 	Keywords []string
 	Depth    int
+	Schema   string
 }
 
 func TokenisePath(folderName string) []string {
@@ -99,14 +101,29 @@ func (g *Graph) Crawl(roots []string, ignore []string) error {
 				return nil
 			}
 
+			// FEAT-12: Index sibling filenames as additional keywords
+			dirEntries, _ := os.ReadDir(path)
+			var fileTokens []string
+			for _, e := range dirEntries {
+				if !e.IsDir() {
+					fTokens := TokenisePath(strings.TrimSuffix(e.Name(), filepath.Ext(e.Name())))
+					fileTokens = append(fileTokens, fTokens...)
+				}
+				if len(fileTokens) > 100 {
+					break
+				}
+			}
+			tokens = deduplicate(append(tokens, fileTokens...))
+
 			// Store in index
 			keywords := strings.Join(tokens, ",")
 			
 			// Get parent folder if any
 			parent := filepath.Dir(path)
 			depth := len(strings.Split(path, string(filepath.Separator)))
+			schema := inferSchema(path)
 
-			_, err = g.Store.DB().Exec("INSERT OR REPLACE INTO folder_index (path, keywords, depth, parent) VALUES (?, ?, ?, ?)", path, keywords, depth, parent)
+			_, err = g.Store.DB().Exec("INSERT OR REPLACE INTO folder_index (path, keywords, depth, parent, schema) VALUES (?, ?, ?, ?, ?)", path, keywords, depth, parent, schema)
 			if err != nil {
 				log.Printf("Failed to index folder %s: %v", path, err)
 			} else {
@@ -143,7 +160,7 @@ func (g *Graph) GetAllPaths() ([]string, error) {
 }
 
 func (g *Graph) ListFolders() ([]FolderIndex, error) {
-	rows, err := g.Store.DB().Query("SELECT path, keywords, depth FROM folder_index")
+	rows, err := g.Store.DB().Query("SELECT path, keywords, depth, schema FROM folder_index")
 	if err != nil {
 		return nil, err
 	}
@@ -153,11 +170,55 @@ func (g *Graph) ListFolders() ([]FolderIndex, error) {
 	for rows.Next() {
 		var f FolderIndex
 		var keywordsStr string
-		if err := rows.Scan(&f.Path, &keywordsStr, &f.Depth); err != nil {
+		var schema sql.NullString
+		if err := rows.Scan(&f.Path, &keywordsStr, &f.Depth, &schema); err != nil {
 			return nil, err
 		}
 		f.Keywords = strings.Split(keywordsStr, ",")
+		f.Schema = schema.String
 		indices = append(indices, f)
 	}
 	return indices, nil
+}
+
+func deduplicate(tokens []string) []string {
+	seen := make(map[string]bool)
+	var result []string
+	for _, t := range tokens {
+		if !seen[t] {
+			result = append(result, t)
+			seen[t] = true
+		}
+	}
+	return result
+}
+
+func inferSchema(path string) string {
+	parent := filepath.Dir(path)
+	entries, _ := os.ReadDir(parent)
+	
+	patterns := make(map[string]int)
+	for _, e := range entries {
+		if e.IsDir() {
+			name := e.Name()
+			var p strings.Builder
+			for _, r := range name {
+				if unicode.IsDigit(r) {
+					p.WriteString(`\d`)
+				} else if unicode.IsLetter(r) {
+					p.WriteString(`[a-zA-Z]`)
+				} else {
+					p.WriteRune(r)
+				}
+			}
+			patterns[p.String()]++
+		}
+	}
+	
+	for pat, count := range patterns {
+		if count >= 3 {
+			return pat
+		}
+	}
+	return ""
 }

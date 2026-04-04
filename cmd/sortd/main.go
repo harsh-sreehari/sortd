@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -245,7 +246,22 @@ var runCmd = &cobra.Command{
 
 		for _, folder := range cfg.Watch.Folders {
 			filepath.Walk(folder, func(path string, info os.FileInfo, err error) error {
-				if err != nil || info.IsDir() {
+				if err != nil {
+					return nil
+				}
+				// FEAT-05: Depth check
+				rel, _ := filepath.Rel(folder, path)
+				if rel != "." {
+					depth := len(strings.Split(filepath.ToSlash(filepath.Clean(rel)), "/"))
+					if depth > cfg.Watch.MaxDepth {
+						if info.IsDir() {
+							return filepath.SkipDir
+						}
+						return nil
+					}
+				}
+
+				if info.IsDir() {
 					return nil
 				}
 				// Skip hidden and .unsorted
@@ -278,6 +294,7 @@ var (
 	logTag    string
 	logSince  string
 	logLimit  int
+	logPage   int
 	logVerbose bool
 )
 
@@ -311,7 +328,8 @@ var logCmd = &cobra.Command{
 			filters["since"] = logSince
 		}
 
-		logs, err := st.SearchLog(logLimit, filters)
+		offset := (logPage - 1) * logLimit
+		logs, err := st.SearchLog(logLimit, offset, filters)
 		if err != nil {
 			log.Fatalf("Failed to fetch logs: %v", err)
 		}
@@ -401,6 +419,10 @@ var logCmd = &cobra.Command{
 					l.Destination)
 			}
 		}
+
+		if len(logs) == logLimit {
+			fmt.Printf("\n💡 Page %d shown. Run 'sortd log --page %d' for more.\n", logPage, logPage+1)
+		}
 	},
 }
 
@@ -427,7 +449,7 @@ var findCmd = &cobra.Command{
 		if findSince != "" {
 			filters["since"] = findSince
 		}
-		logs, err := st.SearchLog(50, filters)
+		logs, err := st.SearchLog(50, 0, filters)
 		if err != nil {
 			log.Fatalf("Search failed: %v", err)
 		}
@@ -446,6 +468,64 @@ var findCmd = &cobra.Command{
 				fmt.Printf("      Why : \033[36m%s\033[0m\n", l.Reasoning)
 			}
 			fmt.Println()
+		}
+	},
+}
+
+var (
+	exportFormat string
+	exportOutput string
+)
+
+var exportCmd = &cobra.Command{
+	Use:   "export",
+	Short: "Export sort history as CSV or JSON",
+	Run: func(cmd *cobra.Command, args []string) {
+		_, st, _, err := initPipeline()
+		if err != nil {
+			log.Fatalf("Init failed: %v", err)
+		}
+		defer st.Close()
+
+		logs, err := st.SearchLog(10000, 0, nil)
+		if err != nil {
+			log.Fatalf("Failed to fetch logs: %v", err)
+		}
+
+		out := os.Stdout
+		if exportOutput != "" {
+			f, err := os.Create(exportOutput)
+			if err != nil {
+				log.Fatalf("Failed to create file: %v", err)
+			}
+			defer f.Close()
+			out = f
+		}
+
+		if exportFormat == "json" {
+			enc := json.NewEncoder(out)
+			enc.SetIndent("", "  ")
+			enc.Encode(logs)
+		} else {
+			writer := csv.NewWriter(out)
+			defer writer.Flush()
+			writer.Write([]string{"ID", "Timestamp", "Action", "Filename", "Source", "Destination", "Tier", "Confidence", "Tags"})
+			for _, l := range logs {
+				writer.Write([]string{
+					strconv.Itoa(l.ID),
+					l.Timestamp,
+					l.Action,
+					l.OriginalFilename,
+					l.OriginalSource,
+					l.Destination,
+					strconv.Itoa(l.Tier),
+					fmt.Sprintf("%.2f", l.Confidence),
+					l.Tags,
+				})
+			}
+		}
+		if exportOutput != "" {
+			fmt.Printf("Exported %d logs to %s\n", len(logs), exportOutput)
 		}
 	},
 }
@@ -936,7 +1016,6 @@ var statusCmd = &cobra.Command{
 			fmt.Printf("%-20s: %d\n", "User Corrections", stats.TotalCorrected)
 			fmt.Printf("%-20s: %d\n", "Folders Indexed", stats.TotalFolders)
 		}
-
 		fmt.Println()
 	},
 }
@@ -1001,17 +1080,20 @@ func init() {
 	logCmd.Flags().BoolVar(&logToday, "today", false, "Show only today's logs")
 	logCmd.Flags().StringVar(&logTag, "tag", "", "Filter by tag")
 	logCmd.Flags().IntVarP(&logLimit, "limit", "n", 20, "Number of logs to show")
+	logCmd.Flags().IntVar(&logPage, "page", 1, "Page number to show")
 	logCmd.Flags().BoolVar(&logVerbose, "verbose", false, "Show detailed reasoning from LLM")
 	logCmd.Flags().StringVar(&logSince, "since", "", "Filter results since a duration (e.g. 24h, 7d, 2w)")
 
 	findCmd.Flags().StringVar(&findTag, "tag", "", "Filter results by specific tag")
 	findCmd.Flags().StringVar(&findSince, "since", "", "Filter results since a duration (e.g. 24h, 7d, 2w)")
+	exportCmd.Flags().StringVar(&exportFormat, "format", "csv", "Export format (csv, json)")
+	exportCmd.Flags().StringVar(&exportOutput, "output", "", "Output file path (default stdout)")
 	tagsCmd.Flags().StringVar(&tagsFolder, "folder", "", "Show tags only for this destination folder")
 	renameCmd.Flags().BoolVar(&renameBatch, "batch", false, "Rename all files in the given directory")
 	pruneCmd.Flags().BoolVar(&pruneConfirm, "confirm", false, "Actually apply the pruning changes")
 
 	daemonCmd.AddCommand(daemonStartCmd, daemonStopCmd, daemonStatusCmd)
-	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd, tagsCmd, renameCmd, pruneCmd, undoCmd, statusCmd)
+	rootCmd.AddCommand(daemonCmd, logCmd, reviewCmd, runCmd, indexCmd, initCmd, findCmd, exportCmd, tagsCmd, renameCmd, pruneCmd, undoCmd, statusCmd)
 }
 
 func main() {

@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS folder_index (
     path     TEXT UNIQUE NOT NULL,
     keywords TEXT NOT NULL,
     depth    INTEGER NOT NULL,
-    parent   TEXT
+    parent   TEXT,
+    schema   TEXT
 );`
 
 	AffinitiesSchema = `

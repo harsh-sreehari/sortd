@@ -3,6 +3,8 @@ package pipeline
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
+	"unicode"
 
 	"github.com/harsh-sreehari/sortd/internal/graph"
 )
@@ -19,7 +21,13 @@ func MatchTier2(path string, folders []graph.FolderIndex) (Decision, bool) {
 	bestFolder := ""
 
 	for _, folder := range folders {
-		score := calculateOverlap(fileTokens, folder.Keywords)
+		score := jaccardSimilarity(fileTokens, folder.Keywords)
+		
+		// FEAT-07: Schema match boost
+		if folder.Schema != "" && matchSchema(filename, folder.Schema) {
+			score += 0.5 // High boost for matching an inferred schema pattern
+		}
+		
 		if score > bestScore {
 			bestScore = score
 			bestFolder = folder.Path
@@ -54,7 +62,7 @@ func MatchDescription(desc string, folders []graph.FolderIndex) (string, bool) {
 	bestFolder := ""
 
 	for _, folder := range folders {
-		score := calculateOverlap(tokens, folder.Keywords)
+		score := jaccardSimilarity(tokens, folder.Keywords)
 		if score > bestScore {
 			bestScore = score
 			bestFolder = folder.Path
@@ -69,22 +77,50 @@ func MatchDescription(desc string, folders []graph.FolderIndex) (string, bool) {
 	return "", false
 }
 
-func calculateOverlap(fileTokens, folderKeywords []string) float64 {
-	if len(folderKeywords) == 0 {
-		return 0
-	}
-
-	matchCount := 0
+func jaccardSimilarity(fileTokens, folderKeywords []string) float64 {
 	fileSet := make(map[string]bool)
 	for _, t := range fileTokens {
-		fileSet[t] = true
+		fileSet[stem(t)] = true
 	}
-
+	folderSet := make(map[string]bool)
 	for _, k := range folderKeywords {
-		if fileSet[k] {
-			matchCount++
+		folderSet[stem(k)] = true
+	}
+	intersection := 0
+	for k := range fileSet {
+		if folderSet[k] {
+			intersection++
 		}
 	}
+	union := len(fileSet) + len(folderSet) - intersection
+	if union == 0 {
+		return 0
+	}
+	return float64(intersection) / float64(union)
+}
 
-	return float64(matchCount) / float64(len(folderKeywords))
+func matchSchema(filename, schema string) bool {
+	var p strings.Builder
+	for _, r := range filename {
+		if unicode.IsDigit(r) {
+			p.WriteString(`\d`)
+		} else if unicode.IsLetter(r) {
+			p.WriteString(`[a-zA-Z]`)
+		} else {
+			p.WriteRune(r)
+		}
+	}
+	// Check if the filename shape matches the folder's inferred schema
+	return strings.Contains(p.String(), schema)
+}
+
+func stem(word string) string {
+	// simple suffix stripping — no external library needed
+	suffixes := []string{"ing", "tion", "ed", "er", "s"}
+	for _, s := range suffixes {
+		if len(word) > len(s)+3 && strings.HasSuffix(word, s) {
+			return strings.TrimSuffix(word, s)
+		}
+	}
+	return word
 }

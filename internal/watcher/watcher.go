@@ -142,6 +142,20 @@ func (w *Watcher) shouldFilter(path string) bool {
 		}
 	}
 
+	// FEAT-05: Depth check
+	for _, root := range w.cfg.Watch.Folders {
+		if strings.HasPrefix(path, root) {
+			rel, err := filepath.Rel(root, path)
+			if err == nil {
+				// Clean and split by slash
+				parts := strings.Split(filepath.ToSlash(filepath.Clean(rel)), "/")
+				if len(parts) > w.cfg.Watch.MaxDepth {
+					return true
+				}
+			}
+		}
+	}
+
 	return false
 }
 

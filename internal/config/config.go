@@ -16,8 +16,9 @@ type Config struct {
 }
 
 type WatchConfig struct {
-	Folders []string `toml:"folders"`
-	Ignore  []string `toml:"ignore"`
+	Folders  []string `toml:"folders"`
+	Ignore   []string `toml:"ignore"`
+	MaxDepth int      `toml:"max_depth"`
 }
 
 type LLMConfig struct {
@@ -43,8 +44,9 @@ type BehaviourConfig struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Watch: WatchConfig{
-			Folders: []string{"~/Downloads"},
-			Ignore:  []string{},
+			Folders:  []string{"~/Downloads"},
+			Ignore:   []string{},
+			MaxDepth: 1,
 		},
 		LLM: LLMConfig{
 			Backend: "lmstudio",
@@ -116,6 +118,10 @@ folders = ["%[1]s/Downloads"]
 
 # Paths to ignore within watched folders. Supports glob patterns.
 ignore = []
+
+# How deep into the folder hierarchy to watch for new files.
+# 1 = top-level only (default), 2 = one subfolder deep, etc.
+max_depth = 1
 
 [llm]
 # Your local LLM endpoint (LM Studio or OpenAI-compatible backend).

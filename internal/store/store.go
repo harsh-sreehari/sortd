@@ -72,6 +72,7 @@ func Open(dbPath string) (*Store, error) {
 	_, _ = db.Exec("ALTER TABLE sort_log ADD COLUMN original_filename TEXT NOT NULL DEFAULT ''")
 	_, _ = db.Exec("ALTER TABLE sort_log ADD COLUMN reasoning TEXT")
 	_, _ = db.Exec("ALTER TABLE sort_log ADD COLUMN original_source TEXT NOT NULL DEFAULT ''")
+	_, _ = db.Exec("ALTER TABLE folder_index ADD COLUMN schema TEXT")
 
 	return &Store{db: db}, nil
 }
@@ -189,7 +190,7 @@ func (s *Store) DeleteLogEntry(id int) error {
 	return err
 }
 
-func (s *Store) SearchLog(n int, filters map[string]string) ([]LogEntry, error) {
+func (s *Store) SearchLog(n int, offset int, filters map[string]string) ([]LogEntry, error) {
 	where := "WHERE 1=1"
 	var args []interface{}
 
@@ -222,8 +223,8 @@ func (s *Store) SearchLog(n int, filters map[string]string) ([]LogEntry, error) 
 	}
 
 	query := fmt.Sprintf(`SELECT id, timestamp, filename, original_filename, original_source, source, destination, tier, confidence, tags, action, reasoning, corrected 
-			  FROM sort_log %s ORDER BY id DESC LIMIT ?`, where)
-	args = append(args, n)
+			  FROM sort_log %s ORDER BY id DESC LIMIT ? OFFSET ?`, where)
+	args = append(args, n, offset)
 
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
